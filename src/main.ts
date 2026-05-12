@@ -202,7 +202,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-shortcut]').forEach((button)
   button.addEventListener('click', () => {
     shortcut = button.dataset.shortcut || DEFAULT_SHORTCUT;
     renderShortcut(shortcut);
-    setStatus('idle', `Shortcut preset selected: ${shortcut}. Click Save to register it.`);
+    setStatus('idle', `Shortcut preset selected: ${formatShortcutLabel(shortcut)}. Click Save to register it.`);
   });
 });
 
@@ -230,7 +230,7 @@ window.addEventListener('keydown', async (event) => {
   captureShortcutMirrorButton.classList.remove('capturing');
   shortcut = next;
   renderShortcut(next);
-  setStatus('success', `Shortcut captured: ${next}. Click Save to register it.`);
+  setStatus('success', `Shortcut captured: ${formatShortcutLabel(next)}. Click Save to register it.`);
 });
 
 autostartInput.addEventListener('change', async () => {
@@ -328,6 +328,10 @@ function displayShortcutPart(part: string) {
   return part === 'CommandOrControl' ? 'Cmd/Ctrl' : part;
 }
 
+function formatShortcutLabel(value: string) {
+  return value.split('+').map((part) => displayShortcutPart(part.trim())).join(' + ');
+}
+
 function shortcutFromEvent(event: KeyboardEvent) {
   const key = normalizeKey(event.key);
   if (!key) return '';
@@ -357,7 +361,7 @@ async function installShortcut(next: string) {
       shortcut = next;
       localStorage.setItem('shortcut', next);
       renderShortcut(next);
-      setStatus('idle', `Preview mode: shortcut saved as ${next}. It registers inside the desktop app.`);
+      setStatus('idle', `Preview mode: shortcut saved as ${formatShortcutLabel(next)}. It registers inside the desktop app.`);
       return;
     }
 
@@ -368,7 +372,7 @@ async function installShortcut(next: string) {
     shortcut = next;
     localStorage.setItem('shortcut', next);
     renderShortcut(next);
-    setStatus('success', `Shortcut registered: ${next}`);
+    setStatus('success', `Shortcut registered: ${formatShortcutLabel(next)}`);
   } catch (error) {
     setStatus('error', `Could not register shortcut: ${String(error)}`);
   }
