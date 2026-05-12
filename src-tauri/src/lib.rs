@@ -34,7 +34,11 @@ struct GroqChatMessage {
 }
 
 #[tauri::command]
-async fn transcribe_and_paste(api_key: String, audio_bytes: Vec<u8>) -> Result<String, String> {
+async fn transcribe_and_paste(
+    api_key: String,
+    audio_bytes: Vec<u8>,
+    vocabulary_prompt: Option<String>,
+) -> Result<String, String> {
     if api_key.trim().is_empty() {
         return Err("Missing Groq API key".into());
     }
@@ -44,11 +48,18 @@ async fn transcribe_and_paste(api_key: String, audio_bytes: Vec<u8>) -> Result<S
         .mime_str("audio/webm")
         .map_err(|e| e.to_string())?;
 
-    let form = Form::new()
+    let mut form = Form::new()
         .text("model", "whisper-large-v3-turbo")
         .text("language", "en")
         .text("response_format", "json")
         .part("file", part);
+
+    if let Some(prompt) = vocabulary_prompt {
+        let prompt = prompt.trim();
+        if !prompt.is_empty() {
+            form = form.text("prompt", prompt.chars().take(900).collect::<String>());
+        }
+    }
 
     let client = reqwest::Client::new();
     let response = client

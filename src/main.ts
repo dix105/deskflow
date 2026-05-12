@@ -5,6 +5,7 @@ import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 
 const DEFAULT_SHORTCUT = 'CommandOrControl+Alt+Space';
 const HISTORY_KEY = 'flowDeskHistory';
+const VOCABULARY_KEY = 'flowDeskVocabulary';
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'shortcuts' | 'rewrite' | 'history';
@@ -135,6 +136,7 @@ app.innerHTML = `
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="drawer-header"><div><p class="eyebrow">Settings</p><h3>App preferences</h3></div><button id="closeSettings" class="icon-button" type="button">Close</button></div>
         <label class="settings-label"><span>Groq API key</span><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label>
+        <label class="settings-label"><span>Common words / vocabulary</span><textarea id="vocabularyInput" class="compact-textarea" placeholder="Add names, product terms, spellings, or phrases. Example: Dixit, FlowDesk, Groq, OpenClaw, Wispr"></textarea><small>Used as Whisper prompt guidance so common words print correctly during transcription.</small></label>
         <label class="check-row"><input id="autostart" type="checkbox" /><span>Open at Windows login and keep running from tray</span></label>
         <div class="settings-grid">
           <div><span class="mini-label">Provider</span><strong>Groq</strong></div>
@@ -155,6 +157,7 @@ app.innerHTML = `
 
 const apiKeyInput = document.querySelector<HTMLInputElement>('#apiKey')!;
 const drawerApiKeyInput = document.querySelector<HTMLInputElement>('#drawerApiKey')!;
+const vocabularyInput = document.querySelector<HTMLTextAreaElement>('#vocabularyInput')!;
 const saveButton = document.querySelector<HTMLButtonElement>('#save')!;
 const saveMirrorButton = document.querySelector<HTMLButtonElement>('#saveMirror')!;
 const toggleButton = document.querySelector<HTMLButtonElement>('#toggle')!;
@@ -180,12 +183,16 @@ const pasteRewriteButton = document.querySelector<HTMLButtonElement>('#pasteRewr
 
 apiKeyInput.value = localStorage.getItem('groqApiKey') || '';
 drawerApiKeyInput.value = apiKeyInput.value;
+vocabularyInput.value = localStorage.getItem(VOCABULARY_KEY) || '';
 renderShortcut(shortcut);
 renderHistory();
 hydrateRewriteFromHistory();
 
 apiKeyInput.addEventListener('change', syncApiKey);
 drawerApiKeyInput.addEventListener('change', syncApiKey);
+vocabularyInput.addEventListener('input', () => {
+  localStorage.setItem(VOCABULARY_KEY, vocabularyInput.value.trim());
+});
 
 function syncApiKey() {
   const key = (document.activeElement === drawerApiKeyInput ? drawerApiKeyInput.value : apiKeyInput.value).trim();
@@ -425,6 +432,7 @@ async function transcribeAndPaste() {
     const text = await invoke<string>('transcribe_and_paste', {
       apiKey: apiKeyInput.value.trim(),
       audioBytes: bytes,
+      vocabularyPrompt: buildVocabularyPrompt(),
     });
 
     addHistory(text);
@@ -473,6 +481,18 @@ function getRewriteText() {
     return '';
   }
   return text;
+}
+
+function buildVocabularyPrompt() {
+  const vocabulary = vocabularyInput.value
+    .split(/[\n,]/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .slice(0, 80)
+    .join(', ');
+
+  if (!vocabulary) return '';
+  return `This is desktop dictation. Use these preferred spellings and common terms when heard: ${vocabulary}.`;
 }
 
 function loadHistory(): HistoryItem[] {
