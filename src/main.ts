@@ -8,7 +8,7 @@ const HISTORY_KEY = 'flowDeskHistory';
 const VOCABULARY_KEY = 'flowDeskVocabulary';
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
-type ViewName = 'dictation' | 'shortcuts' | 'rewrite' | 'history';
+type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
 type RewriteMode = 'clean' | 'professional' | 'shorter' | 'friendly';
 
 type HistoryItem = {
@@ -30,86 +30,118 @@ const isTauriRuntime = '__TAURI_INTERNALS__' in window;
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
-  <main class="utility-shell">
-    <section class="app-window">
-      <header class="window-bar">
-        <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
-        <button class="brand-chip" data-view="dictation" type="button" aria-label="Go to recording">
-          <span class="brand-mark">W</span>
-          <span><strong>FlowDesk</strong><small>Desktop dictation</small></span>
-        </button>
-        <nav class="nav-list" aria-label="Primary">
-          <button class="nav-item active" data-view="dictation" type="button">Record</button>
-          <button class="nav-item" data-view="rewrite" type="button">Rewrite</button>
-          <button class="nav-item" data-view="history" type="button">History</button>
-          <button class="nav-item" data-view="shortcuts" type="button">Hotkey</button>
-        </nav>
-        <button id="settingsButton" class="icon-button" type="button" aria-expanded="false" aria-controls="settingsDrawer">Settings</button>
+  <main class="flow-shell">
+    <section class="desktop-frame">
+      <header class="window-strip">
+        <div class="window-left"><span class="mini-icon">▱</span><span class="mini-icon">◎</span></div>
+        <div class="window-right"><span class="bell">🔔<i>2</i></span><span>—</span><span>□</span><span>×</span></div>
       </header>
 
-      <section class="view-panel active" data-panel="dictation">
-        <div class="record-layout">
-          <aside class="control-pane">
-            <div class="mode-label"><span class="live-dot"></span><span>Idle</span></div>
-            <div class="orb-wrap" aria-hidden="true"><div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div></div>
-            <button id="toggle" class="start-button" type="button"><span class="button-dot"></span>Start recording</button>
-            <button id="openRewrite" class="ghost-button" type="button">Rewrite last transcript</button>
-            <div id="status" class="status idle">Ready. Add your API key, then start recording.</div>
-          </aside>
+      <aside class="side-rail" aria-label="FlowDesk navigation">
+        <button class="brand-lockup" data-view="dictation" type="button">
+          <span class="brand-bars"><i></i><i></i><i></i></span>
+          <strong>FlowDesk</strong>
+          <em>Beta</em>
+        </button>
 
-          <section class="work-pane">
-            <div class="pane-header">
-              <div><p class="eyebrow">Current transcript</p><h1>Ready to record</h1></div>
-              <span class="model-chip">Whisper ready</span>
-            </div>
-            <div class="transcript-preview">
-              <div class="empty-transcript">
-                <span class="transcript-cursor"></span>
-                <div>
-                  <strong>No transcript yet</strong>
-                  <p>Press the hotkey or Start recording. Text will paste into your active app and appear here for recovery.</p>
-                </div>
-              </div>
-              <div class="transcript-tools">
-                <button type="button">Copy</button>
-                <button type="button">Paste again</button>
-                <button type="button">Clear</button>
-              </div>
-            </div>
-            <div class="setup-strip">
-              <label class="api-pill"><span>Groq API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label>
-              <div class="shortcut-pill"><span>Hotkey</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span></button><button id="save" class="save-shortcut" type="button">Save</button></div>
-            </div>
-          </section>
+        <nav class="nav-list" aria-label="Primary">
+          <button class="nav-item active" data-view="dictation" type="button"><span>⌘</span>Home</button>
+          <button class="nav-item" data-view="dictionary" type="button"><span>▣</span>Dictionary</button>
+          <button class="nav-item" data-view="snippets" type="button"><span>✂</span>Snippets</button>
+          <button class="nav-item" data-view="style" type="button"><span>Tt</span>Style</button>
+          <button class="nav-item" data-view="transforms" type="button"><span>↝</span>Transforms</button>
+          <button class="nav-item" data-view="scratchpad" type="button"><span>▤</span>Scratchpad</button>
+        </nav>
+
+        <div class="trial-card">
+          <strong>FlowDesk Trial 🌙</strong>
+          <span>6 of 14 days used</span>
+          <div class="progress"><i></i></div>
+          <p>Upgrade to keep unlimited words, dictionary, and transforms.</p>
+          <button type="button">Upgrade to Pro</button>
         </div>
-      </section>
 
-      <section class="view-panel" data-panel="rewrite">
-        <section class="utility-grid">
-          <article class="panel-card"><div class="section-heading"><p class="eyebrow">Rewrite input</p><h2>Clean up rough dictation</h2></div><textarea id="rewriteInput" placeholder="Record something or paste text here..."></textarea><div class="rewrite-actions"><button data-rewrite="clean" type="button">Clean up</button><button data-rewrite="professional" type="button">Professional</button><button data-rewrite="shorter" type="button">Shorter</button><button data-rewrite="friendly" type="button">Friendly</button></div></article>
-          <article class="panel-card result-card"><div class="section-heading"><p class="eyebrow">Output</p><h2>Ready text</h2></div><div id="rewriteOutput" class="rewrite-output empty">Your rewritten text will appear here.</div><div class="hero-actions"><button id="copyRewrite" class="ghost-button" type="button">Copy</button><button id="pasteRewrite" class="start-button" type="button"><span class="button-dot"></span>Paste</button></div></article>
+        <nav class="rail-footer">
+          <button type="button"><span>♙</span> Invite your team</button>
+          <button type="button"><span>🎁</span> Get a free month</button>
+          <button id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsDrawer"><span>⚙</span> Settings</button>
+          <button type="button"><span>?</span> Help</button>
+        </nav>
+      </aside>
+
+      <section class="content-shell">
+        <section class="view-panel active" data-panel="dictation">
+          <header class="page-head">
+            <div>
+              <h1>Welcome back, Dixit</h1>
+              <p>Dictate anywhere, recover transcripts, and shape text before it lands.</p>
+            </div>
+            <div class="stats-row"><span>🔥 2 days</span><span>🚀 6,921 words</span><span>🏆 132 WPM</span></div>
+          </header>
+
+          <article class="promo-card">
+            <div>
+              <h2>Transform your dictation anywhere you write</h2>
+              <p>Speak naturally, recover every transcript, and transform rough voice notes into polished text.</p>
+              <div class="promo-actions"><button id="toggle" class="primary-btn" type="button"><span class="button-dot"></span>Start recording</button><button id="openRewrite" class="secondary-btn" type="button">Rewrite last</button></div>
+            </div>
+            <div class="app-bubbles" aria-hidden="true"><span>G</span><span>in</span><span>✦</span><span>✉</span><span>▣</span></div>
+          </article>
+
+          <section class="home-grid">
+            <article class="setup-card">
+              <div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div>
+              <div id="status" class="status idle">Ready. Add your API key, then start recording.</div>
+              <label class="field"><span>Groq API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label>
+              <div class="shortcut-inline"><span>Hotkey</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span></button><button id="save" class="soft-btn" type="button">Save</button></div>
+            </article>
+
+            <article class="history-card">
+              <div class="section-title"><span>May 12, 2026</span><button data-view="scratchpad" type="button">Open scratchpad</button></div>
+              <div class="timeline-list">
+                <div><time>11:22 PM</time><p>This transcription was dismissed. <u>Recover your transcript.</u></p></div>
+                <div><time>04:45 PM</time><p>Okay.</p></div>
+                <div><time>03:52 PM</time><p>Start recording from the shortcut and paste into the active field.</p></div>
+                <div><time>12:18 PM</time><p>You can edit words in Dictionary to improve spellings.</p></div>
+              </div>
+            </article>
+          </section>
         </section>
-      </section>
 
-      <section class="view-panel" data-panel="history">
-        <article class="panel-card wide-card"><div class="section-heading"><p class="eyebrow">History</p><h2>Recent transcripts</h2></div><div id="historyList" class="history-list"></div></article>
-      </section>
+        <section class="view-panel" data-panel="dictionary">
+          <header class="page-head"><div><h1>Dictionary</h1><p>Teach FlowDesk the names, products, and words you say often.</p></div><button class="primary-btn small" type="button">Add new</button></header>
+          <article class="dictionary-hero"><h2>FlowDesk speaks the way you speak.</h2><p>Add personal terms, company jargon, client names, or industry-specific lingo. Whisper uses these hints during transcription.</p><div class="word-pills"><span>Dixit</span><span>OpenClaw</span><span>Groq</span><span>Nextbase</span><span>Wispr</span></div></article>
+          <label class="dictionary-editor"><span>Common words / vocabulary</span><textarea id="vocabularyInput" class="compact-textarea" placeholder="Dixit, FlowDesk, Groq, OpenClaw, Wispr"></textarea><small>Separate words by comma or line break. Stored locally.</small></label>
+        </section>
 
-      <section class="view-panel" data-panel="shortcuts">
-        <article class="panel-card wide-card shortcut-panel"><div class="section-heading"><p class="eyebrow">Hotkey</p><h2>Capture keys instead of typing combinations.</h2></div><div class="shortcut-lab"><button id="captureShortcutMirror" class="shortcut-capture large" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="start-button" type="button"><span class="button-dot"></span>Save shortcut</button></div><div class="shortcut-presets"><button data-shortcut="CommandOrControl+Alt+Space" type="button">Cmd/Ctrl + Alt + Space</button><button data-shortcut="Alt+Shift+D" type="button">Alt + Shift + D</button><button data-shortcut="CommandOrControl+Shift+Space" type="button">Cmd/Ctrl + Shift + Space</button></div></article>
-      </section>
+        <section class="view-panel" data-panel="snippets">
+          <header class="page-head"><div><h1>Snippets</h1><p>Reusable text blocks for replies, prompts, intros, and support answers.</p></div><button class="primary-btn small" type="button">Create snippet</button></header>
+          <div class="list-card"><div><strong>Quick intro</strong><p>Hey, here’s the quick context…</p></div><div><strong>Follow-up</strong><p>Checking in on this — should I proceed?</p></div><div><strong>Bug report</strong><p>Expected / Actual / Steps to reproduce…</p></div></div>
+        </section>
 
-      <footer class="status-bar"><span>Paste mode: Clipboard + Ctrl+V</span><span>Transcription: whisper-large-v3-turbo</span><span>History stored locally</span></footer>
+        <section class="view-panel" data-panel="style">
+          <header class="page-head"><div><h1>Style</h1><p>Choose how your dictated text should sound after cleanup.</p></div></header>
+          <section class="style-grid"><article><strong>Professional</strong><p>Clear, polished, business-friendly.</p></article><article><strong>Friendly</strong><p>Warm, direct, conversational.</p></article><article><strong>Short</strong><p>Compressed and action-oriented.</p></article></section>
+        </section>
+
+        <section class="view-panel" data-panel="transforms">
+          <header class="page-head"><div><h1>Transforms</h1><p>Convert rough speech into useful formats.</p></div></header>
+          <section class="rewrite-layout"><article class="transform-card"><div class="section-heading"><p class="eyebrow">Rewrite input</p><h2>Clean up rough dictation</h2></div><textarea id="rewriteInput" placeholder="Record something or paste text here..."></textarea><div class="rewrite-actions"><button data-rewrite="clean" type="button">Clean up</button><button data-rewrite="professional" type="button">Professional</button><button data-rewrite="shorter" type="button">Shorter</button><button data-rewrite="friendly" type="button">Friendly</button></div></article><article class="transform-card"><div class="section-heading"><p class="eyebrow">Output</p><h2>Ready text</h2></div><div id="rewriteOutput" class="rewrite-output empty">Your rewritten text will appear here.</div><div class="promo-actions"><button id="copyRewrite" type="button">Copy</button><button id="pasteRewrite" class="primary-btn" type="button"><span class="button-dot"></span>Paste</button></div></article></section>
+        </section>
+
+        <section class="view-panel" data-panel="scratchpad">
+          <header class="page-head"><div><h1>Scratchpad</h1><p>Recent transcripts and recoverable text.</p></div></header>
+          <article class="history-card full"><div id="historyList" class="history-list"></div></article>
+        </section>
+
+      </section>
     </section>
 
     <aside id="settingsDrawer" class="settings-drawer" aria-hidden="true">
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
-        <div class="drawer-header"><div><p class="eyebrow">Settings</p><h2>Preferences</h2></div><button id="closeSettings" class="icon-button" type="button">Close</button></div>
-        <label class="settings-label"><span>Groq API key</span><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label>
-        <label class="settings-label"><span>Common words / vocabulary</span><textarea id="vocabularyInput" class="compact-textarea" placeholder="Dixit, FlowDesk, Groq, OpenClaw, Wispr"></textarea><small>Used as Whisper prompt guidance so common words print correctly during transcription.</small></label>
-        <label class="check-row"><input id="autostart" type="checkbox" /><span>Open at Windows login and keep running from tray</span></label>
-        <div class="settings-grid"><div><span class="mini-label">Provider</span><strong>Groq</strong></div><div><span class="mini-label">Transcription</span><strong>whisper-large-v3-turbo</strong></div><div><span class="mini-label">Rewrite</span><strong>llama-3.3-70b-versatile</strong></div><div><span class="mini-label">Paste</span><strong>Clipboard + Ctrl+V</strong></div></div>
+        <div class="settings-sidebar"><p>SETTINGS</p><button class="active" type="button">☷ General</button><button type="button">▭ System</button><button type="button"># Vibe coding</button><button type="button">⚗ Experimental</button><hr><p>ACCOUNT</p><button type="button">◎ Account</button><button type="button">♙ Team</button><button type="button">▰ Plans and Billing</button></div>
+        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Shortcuts</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
       </section>
     </aside>
 
@@ -184,7 +216,7 @@ miniStopButton.addEventListener('click', () => toggleRecording());
 settingsButton.addEventListener('click', openSettings);
 closeSettingsButton.addEventListener('click', closeSettings);
 drawerBackdrop.addEventListener('click', closeSettings);
-openRewriteButton.addEventListener('click', () => setView('rewrite'));
+openRewriteButton.addEventListener('click', () => setView('transforms'));
 
 window.addEventListener('keydown', async (event) => {
   if (event.key === 'Escape') closeSettings();
@@ -249,8 +281,8 @@ function setView(view: ViewName) {
   document.querySelectorAll('[data-panel]').forEach((panel) => {
     panel.classList.toggle('active', (panel as HTMLElement).dataset.panel === view);
   });
-  if (view === 'history') renderHistory();
-  if (view === 'rewrite') hydrateRewriteFromHistory();
+  if (view === 'scratchpad') renderHistory();
+  if (view === 'transforms') hydrateRewriteFromHistory();
 }
 
 function beginShortcutCapture() {
@@ -534,7 +566,7 @@ function renderHistory() {
       if (!item) return;
       selectedHistoryId = item.id;
       hydrateRewriteFromHistory();
-      if (button.dataset.historyAction === 'rewrite') setView('rewrite');
+      if (button.dataset.historyAction === 'rewrite') setView('transforms');
       if (button.dataset.historyAction === 'copy') {
         await navigator.clipboard.writeText(item.text);
         setStatus('success', 'Transcript copied.');
