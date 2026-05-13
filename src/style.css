@@ -2,29 +2,26 @@
 
 :root {
   color: #191816;
-  background: #bcbab4;
+  background: #f7f6f1;
   font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 360px; min-height: 100vh; background: #bcbab4; }
+body { margin: 0; min-width: 360px; min-height: 100vh; background: #f7f6f1; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #191816; outline-offset: 2px; }
 
-.flow-shell { min-height: 100vh; padding: 10px; display: grid; place-items: center; }
+.flow-shell { min-height: 100vh; background: #f7f6f1; }
 .desktop-frame {
-  width: min(1220px, 100%);
-  height: min(820px, calc(100vh - 20px));
+  width: 100vw;
+  height: 100vh;
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  border: 1px solid #d7d4cd;
-  border-radius: 10px;
   overflow: hidden;
   background: #f7f6f1;
-  box-shadow: 0 24px 90px rgba(24, 24, 22, 0.28);
 }
 
 .side-rail { min-height: 0; padding: 18px 10px 12px; display: flex; flex-direction: column; gap: 11px; background: #f2f0eb; border-right: 1px solid #e5e1d9; overflow-y: auto; }
@@ -49,19 +46,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .rail-footer { display: grid; gap: 4px; padding-bottom: 10px; }
 .rail-footer button { border: 0; background: transparent; color: #292724; padding: 5px 7px; display: flex; align-items: center; gap: 8px; font-weight: 650; text-align: left; }
 
-.content-shell { margin: 0 10px 10px 0; border-radius: 18px; background: #fff; overflow: hidden; padding: 24px 0 0; display: flex; flex-direction: column; min-height: 0; }
+.content-shell { margin: 0; border-left: 1px solid #e5e1d9; background: #fff; overflow: hidden; padding: 28px 0 0; display: flex; flex-direction: column; min-height: 0; }
 .view-panel { display: none; flex: 1; min-height: 0; overflow: auto; padding: 0 min(7vw, 120px) 24px; scroll-padding-bottom: 24px; }
 .view-panel.active { display: block; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 16px; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 6px; font-size: 26px; line-height: 1.1; letter-spacing: -0.04em; color: #191816; }
-h2 { margin-bottom: 8px; font-size: 28px; line-height: 1.05; letter-spacing: -0.055em; color: #fff; }
+h2 { margin-bottom: 8px; font-size: 28px; line-height: 1.05; letter-spacing: -0.055em; color: #191816; }
 p { color: #58534c; line-height: 1.45; }
 .page-head p { margin-bottom: 0; }
 .stats-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .stats-row span { padding: 9px 12px; border-radius: 999px; background: #f7f5f0; color: #292724; font-size: 13px; font-weight: 700; }
 
-.promo-card, .dictionary-hero { min-height: 138px; border: 1px solid #ebe8e0; border-radius: 18px; padding: 20px 24px; color: #191816; background: linear-gradient(135deg, #fff 0%, #fbfaf7 58%, #f3eee6 100%); position: relative; overflow: hidden; margin-bottom: 18px; }
+.promo-card, .dictionary-hero { min-height: 138px; border: 1px solid #ebe8e0; border-radius: 18px; padding: 20px 24px; color: #191816; background: linear-gradient(135deg, #fff 0%, #fbfaf7 58%, #f3eee6 100%); position: relative; overflow: hidden; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(25,24,22,.03); }
 .promo-card::after { content: ""; position: absolute; right: -70px; top: -90px; width: 220px; height: 220px; border-radius: 50%; background: rgba(126, 84, 45, .14); pointer-events: none; }
 .promo-card { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: center; gap: 22px; }
 .promo-card p, .dictionary-hero p { color: #58534c; max-width: 640px; }
@@ -160,7 +157,7 @@ kbd { display: inline-flex; min-width: 25px; justify-content: center; margin: 0 
 @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 @media (max-width: 960px) {
-  .desktop-frame { height: auto; min-height: calc(100vh - 20px); grid-template-columns: 1fr; }
+  .desktop-frame { grid-template-columns: 1fr; }
   .side-rail { display: none; }
   .content-shell { margin: 0; border-radius: 0; }
   .view-panel { padding: 28px; }
