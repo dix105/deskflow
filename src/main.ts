@@ -57,8 +57,7 @@ app.innerHTML = `
         </div>
 
         <nav class="rail-footer">
-          <button type="button"><span>♙</span> Invite your team</button>
-          <button type="button"><span>🎁</span> Get a free month</button>
+          <button type="button"><span>♙</span> Invite team</button>
           <button id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsDrawer"><span>⚙</span> Settings</button>
           <button type="button"><span>?</span> Help</button>
         </nav>
@@ -74,27 +73,32 @@ app.innerHTML = `
             <div class="stats-row"><span>🔥 2 days</span><span>🚀 6,921 words</span><span>🏆 132 WPM</span></div>
           </header>
 
-          <article class="promo-card">
+          <article class="promo-card console-card">
             <div>
-              <h2>Transform your dictation anywhere you write</h2>
-              <p>Speak naturally, recover every transcript, and transform rough voice notes into polished text.</p>
+              <span class="console-kicker">Recording console</span>
+              <h2>Ready for desktop dictation</h2>
+              <p>Press the hotkey from any app. FlowDesk listens, transcribes, and pastes back into the field you were using.</p>
               <div class="promo-actions"><button id="toggle" class="primary-btn" type="button"><span class="button-dot"></span>Start recording</button><button id="openRewrite" class="secondary-btn" type="button">Rewrite last</button></div>
             </div>
-            <div class="app-bubbles" aria-hidden="true"><span>G</span><span>in</span><span>✦</span><span>✉</span><span>▣</span></div>
+            <div class="console-visual" aria-hidden="true">
+              <div class="wave-card"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="destination-row"><i>Chrome</i><i>Docs</i><i>Chat</i></div>
+              <div class="shortcut-state">Shortcut active · Cmd/Ctrl + Alt + Space</div>
+            </div>
           </article>
 
           <section class="home-grid">
             <article class="setup-card">
               <div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div>
-              <div id="status" class="status idle">Ready. Add your API key, then start recording.</div>
-              <label class="field"><span>Groq API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label>
+              <div id="status" class="status idle">Ready. Set your key once, then use the hotkey from any app.</div>
+              <label class="field"><span>Connection</span><input id="apiKey" type="password" autocomplete="off" placeholder="Groq key stored locally" /></label>
               <div class="shortcut-inline"><span>Hotkey</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span></button><button id="save" class="soft-btn" type="button">Save</button></div>
             </article>
 
             <article class="history-card">
               <div class="section-title"><span>May 12, 2026</span><button data-view="scratchpad" type="button">Open scratchpad</button></div>
               <div class="timeline-list">
-                <div><time>11:22 PM</time><p>This transcription was dismissed. <u>Recover your transcript.</u></p></div>
+                <div><time>11:22 PM</time><p>Recovered transcript from Chrome input field.</p></div>
                 <div><time>04:45 PM</time><p>Okay.</p></div>
                 <div><time>03:52 PM</time><p>Start recording from the shortcut and paste into the active field.</p></div>
                 <div><time>12:18 PM</time><p>You can edit words in Dictionary to improve spellings.</p></div>
@@ -383,7 +387,7 @@ async function installShortcut(next: string) {
       shortcut = next;
       localStorage.setItem('shortcut', next);
       renderShortcut(next);
-      setStatus('idle', `Preview mode: shortcut saved as ${formatShortcutLabel(next)}. It registers inside the desktop app.`);
+      setStatus('idle', `Shortcut saved as ${formatShortcutLabel(next)}. It will register inside the desktop app.`);
       return;
     }
 

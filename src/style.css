@@ -61,18 +61,24 @@ p { color: #58534c; line-height: 1.45; }
 .stats-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .stats-row span { padding: 9px 12px; border-radius: 999px; background: #f7f5f0; color: #292724; font-size: 13px; font-weight: 700; }
 
-.promo-card, .dictionary-hero { min-height: 138px; border-radius: 18px; padding: 20px 24px; color: #fff; background: linear-gradient(125deg, rgba(56,42,31,.9), rgba(124,78,39,.8)), radial-gradient(circle at 72% 20%, rgba(135,164,124,.8), transparent 32%); position: relative; overflow: hidden; margin-bottom: 18px; }
-.promo-card { display: grid; grid-template-columns: minmax(0, 1fr) 230px; align-items: center; }
-.promo-card p, .dictionary-hero p { color: rgba(255,255,255,0.9); max-width: 640px; }
+.promo-card, .dictionary-hero { min-height: 138px; border: 1px solid #ebe8e0; border-radius: 18px; padding: 20px 24px; color: #191816; background: linear-gradient(135deg, #fff 0%, #fbfaf7 58%, #f3eee6 100%); position: relative; overflow: hidden; margin-bottom: 18px; }
+.promo-card::after { content: ""; position: absolute; right: -70px; top: -90px; width: 220px; height: 220px; border-radius: 50%; background: rgba(126, 84, 45, .14); pointer-events: none; }
+.promo-card { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: center; gap: 22px; }
+.promo-card p, .dictionary-hero p { color: #58534c; max-width: 640px; }
+.console-kicker { display: inline-flex; margin-bottom: 9px; color: #7b5a38; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .promo-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .promo-actions button:not(.primary-btn) { border: 0; background: transparent; color: inherit; font-weight: 800; }
 .primary-btn { border: 0; border-radius: 9px; padding: 11px 15px; background: #191816; color: #fff; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
-.secondary-btn { border: 1px solid rgba(255,255,255,.42) !important; border-radius: 9px; padding: 10px 14px; background: rgba(255,255,255,.16) !important; color: #fff !important; font-weight: 800; }
+.secondary-btn { border: 1px solid #ddd8cf !important; border-radius: 9px; padding: 10px 14px; background: #fff !important; color: #191816 !important; font-weight: 800; }
 .primary-btn.small { padding: 10px 16px; }
 .button-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.app-bubbles { position: relative; height: 160px; }
-.app-bubbles span { position: absolute; width: 45px; height: 45px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.82); color: #191816; font-weight: 900; box-shadow: 0 12px 24px rgba(0,0,0,0.22); }
-.app-bubbles span:nth-child(1){right:110px;top:5px}.app-bubbles span:nth-child(2){right:18px;bottom:0}.app-bubbles span:nth-child(3){right:80px;bottom:42px}.app-bubbles span:nth-child(4){right:0;top:58px}.app-bubbles span:nth-child(5){right:130px;bottom:0}
+.console-visual { display: grid; gap: 10px; }
+.wave-card { height: 86px; border: 1px solid #e5e0d7; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 24px rgba(25,24,22,.06); position: relative; z-index: 1; }
+.wave-card span { width: 7px; border-radius: 999px; background: #7b5a38; }
+.wave-card span:nth-child(1) { height: 22px; } .wave-card span:nth-child(2) { height: 42px; } .wave-card span:nth-child(3) { height: 62px; } .wave-card span:nth-child(4) { height: 38px; } .wave-card span:nth-child(5) { height: 28px; }
+.destination-row { display: flex; gap: 8px; }
+.destination-row i, .shortcut-state { border: 1px solid #e5e0d7; border-radius: 999px; padding: 7px 10px; background: #fff; color: #4d4944; font-style: normal; font-size: 12px; font-weight: 800; position: relative; z-index: 1; }
+.shortcut-state { border-radius: 11px; text-align: center; }
 
 .home-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .setup-card { border: 1px solid #ebe8e0; border-radius: 14px; padding: 12px; background: #fff; }
