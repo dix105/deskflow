@@ -47,14 +47,6 @@ app.innerHTML = `
           <button class="nav-item" data-view="scratchpad" type="button"><span>▤</span>Scratchpad</button>
         </nav>
 
-        <div class="trial-card">
-          <strong>FlowDesk Trial 🌙</strong>
-          <span>6 of 14 days used</span>
-          <div class="progress"><i></i></div>
-          <p>Upgrade to keep unlimited words, dictionary, and transforms.</p>
-          <button type="button">Upgrade to Pro</button>
-        </div>
-
         <nav class="rail-footer">
           <button type="button"><span>♙</span> Invite team</button>
           <button id="settingsButton" type="button" aria-expanded="false" aria-controls="settingsDrawer"><span>⚙</span> Settings</button>
