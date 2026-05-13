@@ -52,9 +52,8 @@ app.innerHTML = `
           <header class="page-head">
             <div>
               <h1>Welcome back, Dixit</h1>
-              <p>Dictate anywhere, recover transcripts, and shape text before it lands.</p>
+              <p>Dictate from anywhere. Press your shortcut, speak, and paste clean text back into the app you were using.</p>
             </div>
-            <div class="stats-row"><span>🔥 2 days</span><span>🚀 6,921 words</span><span>🏆 132 WPM</span></div>
           </header>
 
           <article class="promo-card console-card">
@@ -64,28 +63,21 @@ app.innerHTML = `
               <p>Press the hotkey from any app. FlowDesk listens, transcribes, and pastes back into the field you were using.</p>
               <div class="promo-actions"><button id="toggle" class="primary-btn" type="button"><span class="button-dot"></span>Start recording</button><button id="openRewrite" class="secondary-btn" type="button">Rewrite last</button></div>
             </div>
-            <div class="console-visual" aria-hidden="true">
+            <div class="console-visual clean" aria-hidden="true">
               <div class="wave-card"><span></span><span></span><span></span><span></span><span></span></div>
-              <div class="destination-row"><i>Chrome</i><i>Docs</i><i>Chat</i></div>
-              <div class="shortcut-state">Shortcut active · Cmd/Ctrl + Alt + Space</div>
             </div>
           </article>
 
           <section class="home-grid">
-            <article class="setup-card">
-              <div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div>
-              <div id="status" class="status idle">Ready. Set your key once, then use the hotkey from any app.</div>
-              <label class="field"><span>Connection</span><input id="apiKey" type="password" autocomplete="off" placeholder="Groq key stored locally" /></label>
-              <div class="shortcut-inline"><span>Hotkey</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span></button><button id="save" class="soft-btn" type="button">Save</button></div>
-            </article>
-
-            <article class="history-card">
-              <div class="section-title"><span>May 12, 2026</span><button data-view="scratchpad" type="button">Open scratchpad</button></div>
-              <div class="timeline-list">
-                <div><time>11:22 PM</time><p>Recovered transcript from Chrome input field.</p></div>
-                <div><time>04:45 PM</time><p>Okay.</p></div>
-                <div><time>03:52 PM</time><p>Start recording from the shortcut and paste into the active field.</p></div>
-                <div><time>12:18 PM</time><p>You can edit words in Dictionary to improve spellings.</p></div>
+            <article class="setup-card hotkey-card">
+              <div class="setup-heading">
+                <div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div>
+                <div><strong>Your dictation key</strong><span>Set once. Use everywhere.</span></div>
+              </div>
+              <div class="shortcut-inline shortcut-large"><span>Keyboard shortcut</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span></button><button id="save" class="soft-btn" type="button">Save</button></div>
+              <div class="hotkey-footer">
+                <div id="status" class="status idle">Ready. Press the shortcut to record and paste.</div>
+                <label class="field compact-field"><span>Groq connection</span><input id="apiKey" type="password" autocomplete="off" placeholder="Groq key stored locally" /></label>
               </div>
             </article>
           </section>

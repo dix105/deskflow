@@ -49,18 +49,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .content-shell { margin: 0; border-left: 1px solid #e5e1d9; background: #fff; overflow: hidden; padding: 28px 0 0; display: flex; flex-direction: column; min-height: 0; }
 .view-panel { display: none; flex: 1; min-height: 0; overflow: auto; padding: 0 min(7vw, 120px) 24px; scroll-padding-bottom: 24px; }
 .view-panel.active { display: block; }
-.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 16px; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 18px; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 6px; font-size: 26px; line-height: 1.1; letter-spacing: -0.04em; color: #191816; }
 h2 { margin-bottom: 8px; font-size: 28px; line-height: 1.05; letter-spacing: -0.055em; color: #191816; }
 p { color: #58534c; line-height: 1.45; }
 .page-head p { margin-bottom: 0; }
-.stats-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.stats-row span { padding: 9px 12px; border-radius: 999px; background: #f7f5f0; color: #292724; font-size: 13px; font-weight: 700; }
+/* Keep the home screen quiet: the shortcut and recording flow are the product. */
 
-.promo-card, .dictionary-hero { min-height: 138px; border: 1px solid #ebe8e0; border-radius: 18px; padding: 20px 24px; color: #191816; background: linear-gradient(135deg, #fff 0%, #fbfaf7 58%, #f3eee6 100%); position: relative; overflow: hidden; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(25,24,22,.03); }
+.promo-card, .dictionary-hero { min-height: 110px; border: 1px solid #ebe8e0; border-radius: 18px; padding: 18px 22px; color: #191816; background: #fff; position: relative; overflow: hidden; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(25,24,22,.03); }
 .promo-card::after { content: ""; position: absolute; right: -70px; top: -90px; width: 220px; height: 220px; border-radius: 50%; background: rgba(126, 84, 45, .14); pointer-events: none; }
-.promo-card { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: center; gap: 22px; }
+.promo-card { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 22px; }
 .promo-card p, .dictionary-hero p { color: #58534c; max-width: 640px; }
 .console-kicker { display: inline-flex; margin-bottom: 9px; color: #7b5a38; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .promo-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -70,33 +69,46 @@ p { color: #58534c; line-height: 1.45; }
 .primary-btn.small { padding: 10px 16px; }
 .button-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .console-visual { display: grid; gap: 10px; }
+.console-visual.clean { display: none; }
 .wave-card { height: 86px; border: 1px solid #e5e0d7; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 24px rgba(25,24,22,.06); position: relative; z-index: 1; }
+.console-visual.clean .wave-card { width: 156px; height: 118px; border-radius: 24px; box-shadow: none; background: #fbfaf7; }
 .wave-card span { width: 7px; border-radius: 999px; background: #7b5a38; }
 .wave-card span:nth-child(1) { height: 22px; } .wave-card span:nth-child(2) { height: 42px; } .wave-card span:nth-child(3) { height: 62px; } .wave-card span:nth-child(4) { height: 38px; } .wave-card span:nth-child(5) { height: 28px; }
 .destination-row { display: flex; gap: 8px; }
 .destination-row i, .shortcut-state { border: 1px solid #e5e0d7; border-radius: 999px; padding: 7px 10px; background: #fff; color: #4d4944; font-style: normal; font-size: 12px; font-weight: 800; position: relative; z-index: 1; }
 .shortcut-state { border-radius: 11px; text-align: center; }
 
-.home-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: stretch; }
-.setup-card { border: 1px solid #ebe8e0; border-radius: 14px; padding: 12px; background: #fff; }
-.record-orb { width: 78px; height: 78px; margin: 0 auto 12px; border-radius: 20px; display: grid; place-items: center; position: relative; background: #f4f1ea; border: 1px solid #e4e0d8; }
-.record-orb .orb-core, .record-orb > span { width: 34px; height: 34px; border-radius: 11px; background: #191816; z-index: 1; }
-.record-orb i { position: absolute; bottom: 28px; width: 3px; border-radius: 99px; background: #b7b0a4; }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.setup-card { border: 1px solid #e2ddd4; border-radius: 18px; padding: 18px; background: linear-gradient(180deg, #fff 0%, #fbfaf7 100%); box-shadow: 0 1px 2px rgba(25,24,22,.03); }
+.hotkey-card { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; align-items: center; padding: 28px; border-color: #d6cec1; box-shadow: 0 14px 34px rgba(25,24,22,.07); }
+.setup-heading { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
+.setup-heading strong { display: block; color: #191816; font-size: 22px; letter-spacing: -.04em; line-height: 1; }
+.setup-heading span { display: block; margin-top: 4px; color: #6b665e; font-size: 13px; font-weight: 700; }
+.record-orb { width: 58px; height: 58px; margin: 0; border-radius: 17px; display: grid; place-items: center; position: relative; background: #f4f1ea; border: 1px solid #e4e0d8; flex: 0 0 auto; }
+.record-orb .orb-core, .record-orb > span { width: 27px; height: 27px; border-radius: 9px; background: #191816; z-index: 1; }
+.record-orb i { position: absolute; bottom: 20px; width: 3px; border-radius: 99px; background: #b7b0a4; }
 .record-orb i:nth-of-type(1){height:14px;transform:translateX(-22px)}.record-orb i:nth-of-type(2){height:24px;transform:translateX(-8px)}.record-orb i:nth-of-type(3){height:21px;transform:translateX(8px)}.record-orb i:nth-of-type(4){height:14px;transform:translateX(22px)}
 .record-orb.recording { border-color: #ef4444; animation: breathe 1s ease-in-out infinite; }
 .record-orb.recording .orb-core, .record-orb.recording > span, .record-orb.recording i { background: #dc2626; }
-.status { padding: 11px; border: 1px solid #ece9e2; border-radius: 10px; color: #58534c; background: #faf9f6; font-size: 13px; line-height: 1.35; margin-bottom: 14px; }
+.status { padding: 12px 13px; border: 1px solid #ece9e2; border-radius: 12px; color: #58534c; background: #fff; font-size: 13px; line-height: 1.35; margin: 14px 0; }
 .status.recording { color: #991b1b; border-color: #fecaca; background: #fff7f7; }
 .status.working { color: #92400e; border-color: #fde68a; background: #fffbeb; }
 .status.success { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
 .status.error { color: #991b1b; border-color: #fecaca; background: #fff1f2; }
 .field { display: grid; gap: 6px; margin-bottom: 12px; }
+.compact-field { margin-bottom: 0; }
 .field span, .shortcut-inline > span, .dictionary-editor span, .settings-row span { color: #6b665e; font-size: 12px; font-weight: 800; }
 input, textarea { width: 100%; border: 1px solid #e3dfd6; border-radius: 9px; padding: 10px 11px; background: #fff; color: #191816; outline: none; }
 input::placeholder, textarea::placeholder { color: #aaa49a; }
 .shortcut-inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .shortcut-inline > span { grid-column: 1 / -1; }
+.shortcut-large { padding: 16px; border: 1px solid #ebe6dd; border-radius: 20px; background: #fff; }
+.shortcut-large > span { color: #7b5a38; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; }
 .shortcut-capture { min-height: 38px; border: 1px dashed #d8d3c9; border-radius: 9px; background: #fbfaf7; color: #191816; }
+.shortcut-large .shortcut-capture { min-height: 112px; border: 1px solid #cfc6b8; border-radius: 20px; background: #f7f5f0; font-size: 29px; font-weight: 850; letter-spacing: -.04em; }
+.shortcut-large .soft-btn { min-height: 112px; min-width: 104px; border-radius: 20px; background: #191816; color: #fff; font-size: 18px; }
+.hotkey-footer { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: end; }
+.hotkey-footer .status { margin: 0; min-height: 58px; display: flex; align-items: center; }
 .shortcut-capture.capturing { border-color: #191816; box-shadow: 0 0 0 4px rgba(25,24,22,.08); }
 kbd { display: inline-flex; min-width: 25px; justify-content: center; margin: 0 2px; padding: 3px 6px; border: 1px solid #e2ded5; border-radius: 6px; background: #f1eee8; font-weight: 750; }
 .shortcut-plus { color: #928b80; font-weight: 900; }
