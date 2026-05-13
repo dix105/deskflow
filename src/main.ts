@@ -23,6 +23,7 @@ let recorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];
 let shortcut = localStorage.getItem('shortcut') || DEFAULT_SHORTCUT;
 let capturingShortcut = false;
+let pressedShortcutModifiers = new Set<string>();
 let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
 const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -208,23 +209,36 @@ drawerBackdrop.addEventListener('click', closeSettings);
 openRewriteButton.addEventListener('click', () => setView('transforms'));
 
 window.addEventListener('keydown', async (event) => {
-  if (event.key === 'Escape') {
-    if (capturingShortcut) {
-      finishShortcutCapture(shortcut, false);
-      setStatus('idle', 'Shortcut capture cancelled.');
-      return;
-    }
+  if (!capturingShortcut && event.key === 'Escape') {
     closeSettings();
+    return;
   }
 
   if (!capturingShortcut) return;
   event.preventDefault();
   event.stopPropagation();
 
+  if (event.key === 'Escape') {
+    finishShortcutCapture(shortcut, false);
+    setStatus('idle', 'Shortcut capture cancelled.');
+    return;
+  }
+
+  updateShortcutModifierState(event, true);
   const next = shortcutFromEvent(event);
-  if (!next) return;
+
+  if (!next) {
+    renderShortcutPreview();
+    return;
+  }
 
   finishShortcutCapture(next, true);
+}, true);
+
+window.addEventListener('keyup', (event) => {
+  if (!capturingShortcut) return;
+  updateShortcutModifierState(event, false);
+  renderShortcutPreview();
 }, true);
 
 autostartInput.addEventListener('change', async () => {
@@ -280,10 +294,11 @@ function setView(view: ViewName) {
 
 async function beginShortcutCapture() {
   capturingShortcut = true;
+  pressedShortcutModifiers = new Set<string>();
   captureShortcutButton.classList.add('capturing');
   captureShortcutMirrorButton.classList.add('capturing');
-  shortcutValue.textContent = 'Press your shortcut…';
-  shortcutValueMirror.textContent = 'Press your shortcut…';
+  shortcutValue.textContent = 'Hold Ctrl/Alt, then press a key…';
+  shortcutValueMirror.textContent = 'Hold Ctrl/Alt, then press a key…';
 
   // Avoid the currently registered global shortcut stealing the key event while
   // the user is trying to record a new shortcut.
@@ -294,6 +309,7 @@ async function beginShortcutCapture() {
 
 function finishShortcutCapture(next: string, shouldSave: boolean) {
   capturingShortcut = false;
+  pressedShortcutModifiers = new Set<string>();
   captureShortcutButton.classList.remove('capturing');
   captureShortcutMirrorButton.classList.remove('capturing');
   shortcut = next;
@@ -346,19 +362,50 @@ function formatShortcutLabel(value: string) {
 
 function shortcutFromEvent(event: KeyboardEvent) {
   const key = normalizeKey(event.key);
-  if (!key) return '';
+  if (!key || ['Control', 'Meta', 'Alt', 'Shift'].includes(key)) return '';
 
-  const parts: string[] = [];
-  if (event.ctrlKey || event.metaKey) parts.push('CommandOrControl');
-  if (event.altKey) parts.push('Alt');
-  if (event.shiftKey) parts.push('Shift');
+  const parts = shortcutModifierParts(event);
 
-  if (!['Control', 'Meta', 'Alt', 'Shift'].includes(key)) parts.push(key);
+  // Global dictation hotkeys should not be plain letters like "Z" because that
+  // hijacks normal typing. Require at least one modifier before accepting.
+  if (parts.length === 0) {
+    setStatus('idle', 'Hold Ctrl, Alt, or Shift, then press the final key.');
+    return '';
+  }
 
-  // Ignore modifier-only events; capture once the user presses the real key in
-  // the combination. Single non-modifier keys are allowed for power users.
-  const hasMainKey = parts.some((part) => !['CommandOrControl', 'Alt', 'Shift'].includes(part));
-  return hasMainKey ? parts.join('+') : '';
+  parts.push(key);
+  return parts.join('+');
+}
+
+function updateShortcutModifierState(event: KeyboardEvent, isDown: boolean) {
+  const modifier = modifierFromKey(event.key);
+  if (!modifier) return;
+  if (isDown) pressedShortcutModifiers.add(modifier);
+  else pressedShortcutModifiers.delete(modifier);
+}
+
+function modifierFromKey(key: string) {
+  if (key === 'Control') return 'CommandOrControl';
+  if (key === 'Meta') return 'CommandOrControl';
+  if (key === 'Alt') return 'Alt';
+  if (key === 'Shift') return 'Shift';
+  return '';
+}
+
+function shortcutModifierParts(event?: KeyboardEvent) {
+  const parts = new Set<string>(pressedShortcutModifiers);
+  if (event?.ctrlKey || event?.metaKey) parts.add('CommandOrControl');
+  if (event?.altKey) parts.add('Alt');
+  if (event?.shiftKey) parts.add('Shift');
+
+  return ['CommandOrControl', 'Alt', 'Shift'].filter((part) => parts.has(part));
+}
+
+function renderShortcutPreview() {
+  const parts = shortcutModifierParts();
+  const label = parts.length ? `${formatShortcutLabel(parts.join('+'))} + …` : 'Hold Ctrl/Alt, then press a key…';
+  shortcutValue.textContent = label;
+  shortcutValueMirror.textContent = label;
 }
 
 function normalizeKey(key: string) {
