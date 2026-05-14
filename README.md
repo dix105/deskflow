@@ -13,7 +13,7 @@ Deskflow was created as a desktop-first dictation tool with a clean Flow-style i
 - Automatic transcription and paste into the active app
 - Local transcript history / scratchpad
 - Dictation stats: words per minute, average words, and total words spoken
-- Default hold-to-record audio ducking that lowers system volume while the shortcut is held and restores it on release
+- Default audio ducking that lowers system volume while recording and restores it after
 - Optional background media pause/resume while recording
 - Global polish shortcut that copies selected text, polishes it, and pastes it back
 - Dictionary vocabulary hints for better spelling
@@ -153,12 +153,12 @@ flowDeskPolishShortcut
 
 Settings includes two separate controls:
 
-- **Smooth volume ducking** is always on for shortcut dictation: hold shortcut to lower system volume, release to restore.
+- **Smooth volume ducking** is always on for shortcut dictation: press once to record with lower system volume, press again to stop and restore.
 - **Pause background media** sends the system media play/pause key when recording starts and stops, so videos/music can pause and resume.
 
 ### Smooth volume ducking
 
-Deskflow saves the current Windows system volume, gently lowers it while the dictation shortcut is held, then restores the exact saved volume when the shortcut is released and recording stops. This is always on for shortcut dictation so music/video does not overpower your voice.
+Deskflow saves the current Windows system volume, gently lowers it while recording, then restores the exact saved volume after recording/transcription stops. Settings includes a **Test audio ducking** button so restore can be verified without doing a real dictation.
 
 ### Dictation stats
 

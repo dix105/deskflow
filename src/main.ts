@@ -14,6 +14,7 @@ const TOTAL_WORDS_KEY = 'flowDeskTotalWordsSpoken';
 const MEDIA_PAUSE_KEY = 'flowDeskPauseBackgroundMedia';
 const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
 const AUDIO_RESTORE_DELAY_MS = 150;
+const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -40,8 +41,8 @@ let transcriptionProvider = (localStorage.getItem(PROVIDER_KEY) as Transcription
 let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
 let recordingStartedAt = 0;
-let recordingShortcutLocked = false;
-let shortcutReleaseWatcher: number | null = null;
+let lastRecordingToggleAt = 0;
+let recordingTransitionInFlight = false;
 let isAudioDucked = false;
 let totalWordsSpoken = loadTotalWordsSpoken(historyItems);
 let audioDuckingEnabled = true;
@@ -174,7 +175,7 @@ app.innerHTML = `
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-sidebar"><p>SETTINGS</p><button class="active" type="button">☷ General</button><button type="button">▭ System</button><button type="button"># Vibe coding</button><button type="button">⚗ Experimental</button><hr><p>ACCOUNT</p><button type="button">◎ Account</button><button type="button">♙ Team</button><button type="button">▰ Plans and Billing</button></div>
-        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Dictation shortcut</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><div class="settings-row"><div><strong>Polish text shortcut</strong><span>Select text anywhere, then polish and paste back</span></div><button id="capturePolishShortcut" class="soft-btn" type="button"><span id="polishShortcutValue">Cmd/Ctrl + Shift + P</span></button><button id="savePolishShortcut" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
+        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Dictation shortcut</strong><span>Press once to start, press again to stop</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><div class="settings-row"><div><strong>Polish text shortcut</strong><span>Select text anywhere, then polish and paste back</span></div><button id="capturePolishShortcut" class="soft-btn" type="button"><span id="polishShortcutValue">Cmd/Ctrl + Shift + P</span></button><button id="savePolishShortcut" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><div class="settings-row"><div><strong>Test audio ducking</strong><span>Lowers volume briefly, then restores it automatically.</span></div><button id="testAudioDucking" class="soft-btn" type="button">Run test</button></div><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
       </section>
     </aside>
 
@@ -205,6 +206,7 @@ const drawerBackdrop = document.querySelector<HTMLDivElement>('#drawerBackdrop')
 const settingsDrawer = document.querySelector<HTMLElement>('#settingsDrawer')!;
 const autostartInput = document.querySelector<HTMLInputElement>('#autostart')!;
 const pauseBackgroundMediaInput = document.querySelector<HTMLInputElement>('#pauseBackgroundMedia')!;
+const testAudioDuckingButton = document.querySelector<HTMLButtonElement>('#testAudioDucking')!;
 const statusBox = document.querySelector<HTMLElement>('#status')!;
 const totalWordsSpokenEl = document.querySelector<HTMLElement>('#totalWordsSpoken')!;
 const averageWordsPerMinuteEl = document.querySelector<HTMLElement>('#averageWordsPerMinute')!;
@@ -305,6 +307,7 @@ closeSettingsButton.addEventListener('click', closeSettings);
 drawerBackdrop.addEventListener('click', closeSettings);
 openRewriteButton?.addEventListener('click', () => setView('transforms'));
 startFromScratchpadButton.addEventListener('click', () => toggleRecording());
+testAudioDuckingButton.addEventListener('click', () => testAudioDucking());
 
 window.addEventListener('keydown', async (event) => {
   if (!captureTarget && event.key === 'Escape') {
@@ -571,7 +574,7 @@ async function installShortcut(next: string) {
     if (shortcut && await isRegistered(shortcut)) {
       await unregister(shortcut);
     }
-    await register(next, () => handleRecordingShortcut());
+    await register(next, () => toggleRecording());
     shortcut = next;
     localStorage.setItem('shortcut', next);
     renderShortcut(next);
@@ -634,34 +637,33 @@ async function polishSelectedText() {
   }
 }
 
-function handleRecordingShortcut() {
-  if (recordingShortcutLocked) return;
-  recordingShortcutLocked = true;
-  toggleRecording();
-  watchShortcutRelease();
-}
+async function testAudioDucking() {
+  if (!isTauriRuntime) {
+    setStatus('idle', 'Audio ducking test runs inside the desktop app.');
+    return;
+  }
 
-function watchShortcutRelease() {
-  if (!isTauriRuntime) return;
-  if (shortcutReleaseWatcher) window.clearInterval(shortcutReleaseWatcher);
-
-  shortcutReleaseWatcher = window.setInterval(async () => {
-    const isPressed = await invoke<boolean>('is_shortcut_pressed', { shortcut });
-    if (isPressed) return;
-
-    if (shortcutReleaseWatcher) window.clearInterval(shortcutReleaseWatcher);
-    shortcutReleaseWatcher = null;
-    recordingShortcutLocked = false;
-
-    if (recorder?.state === 'recording') recorder.stop();
-  }, 80);
+  try {
+    setStatus('working', 'Testing audio ducking…');
+    await invoke('start_audio_ducking');
+    await sleep(1800);
+    await invoke('restore_audio_ducking');
+    setStatus('success', 'Audio ducking test finished and volume restored.');
+  } catch (error) {
+    setStatus('error', `Audio ducking test failed: ${String(error)}`);
+  }
 }
 
 async function toggleRecording() {
+  const now = Date.now();
+  if (recordingTransitionInFlight || now - lastRecordingToggleAt < RECORDING_TOGGLE_DEBOUNCE_MS) return;
+  lastRecordingToggleAt = now;
   if (recorder && recorder.state === 'recording') {
     recorder.stop();
     return;
   }
+
+  recordingTransitionInFlight = true;
 
   try {
     syncApiKey();
@@ -696,13 +698,15 @@ async function toggleRecording() {
 
     recordingStartedAt = Date.now();
     recorder.start();
-    setStatus('recording', 'Recording… press shortcut or click stop when done.');
+    setStatus('recording', 'Recording… press shortcut again or click stop when done.');
   } catch (error) {
     await restoreAudioAfterDelay();
     if (pauseBackgroundMediaEnabled && isTauriRuntime) {
       await invoke('resume_background_media');
     }
     setStatus('error', `Mic error: ${String(error)}`);
+  } finally {
+    recordingTransitionInFlight = false;
   }
 }
 
