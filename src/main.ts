@@ -14,7 +14,7 @@ const TOTAL_WORDS_KEY = 'flowDeskTotalWordsSpoken';
 const AUDIO_DUCKING_KEY = 'flowDeskAudioDucking';
 const MEDIA_PAUSE_KEY = 'flowDeskPauseBackgroundMedia';
 const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
-const SHORTCUT_TOGGLE_DEBOUNCE_MS = 900;
+const SHORTCUT_RELEASE_QUIET_MS = 900;
 const AUDIO_RESTORE_DELAY_MS = 1200;
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
@@ -42,7 +42,8 @@ let transcriptionProvider = (localStorage.getItem(PROVIDER_KEY) as Transcription
 let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
 let recordingStartedAt = 0;
-let lastRecordingToggleAt = 0;
+let recordingShortcutLocked = false;
+let recordingShortcutUnlockTimer: number | null = null;
 let isAudioDucked = false;
 let totalWordsSpoken = loadTotalWordsSpoken(historyItems);
 let audioDuckingEnabled = localStorage.getItem(AUDIO_DUCKING_KEY) === 'true';
@@ -580,7 +581,7 @@ async function installShortcut(next: string) {
     if (shortcut && await isRegistered(shortcut)) {
       await unregister(shortcut);
     }
-    await register(next, () => toggleRecording());
+    await register(next, () => handleRecordingShortcut());
     shortcut = next;
     localStorage.setItem('shortcut', next);
     renderShortcut(next);
@@ -643,11 +644,26 @@ async function polishSelectedText() {
   }
 }
 
-async function toggleRecording() {
-  const now = Date.now();
-  if (now - lastRecordingToggleAt < SHORTCUT_TOGGLE_DEBOUNCE_MS) return;
-  lastRecordingToggleAt = now;
+function handleRecordingShortcut() {
+  if (recordingShortcutLocked) {
+    armRecordingShortcutUnlock();
+    return;
+  }
 
+  recordingShortcutLocked = true;
+  armRecordingShortcutUnlock();
+  toggleRecording();
+}
+
+function armRecordingShortcutUnlock() {
+  if (recordingShortcutUnlockTimer) window.clearTimeout(recordingShortcutUnlockTimer);
+  recordingShortcutUnlockTimer = window.setTimeout(() => {
+    recordingShortcutLocked = false;
+    recordingShortcutUnlockTimer = null;
+  }, SHORTCUT_RELEASE_QUIET_MS);
+}
+
+async function toggleRecording() {
   if (recorder && recorder.state === 'recording') {
     recorder.stop();
     return;
