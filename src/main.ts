@@ -10,6 +10,7 @@ const PROVIDER_KEY = 'flowDeskProvider';
 const ELEVENLABS_KEY = 'elevenLabsApiKey';
 const SARVAM_KEY = 'sarvamApiKey';
 const TOTAL_WORDS_KEY = 'flowDeskTotalWordsSpoken';
+const AUDIO_DUCKING_KEY = 'flowDeskAudioDucking';
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -36,6 +37,7 @@ let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
 let recordingStartedAt = 0;
 let totalWordsSpoken = loadTotalWordsSpoken(historyItems);
+let audioDuckingEnabled = localStorage.getItem(AUDIO_DUCKING_KEY) === 'true';
 const isTauriRuntime = '__TAURI_INTERNALS__' in window;
 const numberFormatter = new Intl.NumberFormat();
 
@@ -152,7 +154,7 @@ app.innerHTML = `
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-sidebar"><p>SETTINGS</p><button class="active" type="button">☷ General</button><button type="button">▭ System</button><button type="button"># Vibe coding</button><button type="button">⚗ Experimental</button><hr><p>ACCOUNT</p><button type="button">◎ Account</button><button type="button">♙ Team</button><button type="button">▰ Plans and Billing</button></div>
-        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Shortcuts</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
+        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Shortcuts</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Smooth volume ducking</strong><span>Fade system audio down while recording, then restore it after.</span></div><input id="audioDucking" type="checkbox" /></label><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
       </section>
     </aside>
 
@@ -178,6 +180,7 @@ const closeSettingsButton = document.querySelector<HTMLButtonElement>('#closeSet
 const drawerBackdrop = document.querySelector<HTMLDivElement>('#drawerBackdrop')!;
 const settingsDrawer = document.querySelector<HTMLElement>('#settingsDrawer')!;
 const autostartInput = document.querySelector<HTMLInputElement>('#autostart')!;
+const audioDuckingInput = document.querySelector<HTMLInputElement>('#audioDucking')!;
 const statusBox = document.querySelector<HTMLElement>('#status')!;
 const totalWordsSpokenEl = document.querySelector<HTMLElement>('#totalWordsSpoken')!;
 const averageWordsPerMinuteEl = document.querySelector<HTMLElement>('#averageWordsPerMinute')!;
@@ -202,6 +205,7 @@ if (vocabularyInput) vocabularyInput.value = localStorage.getItem(VOCABULARY_KEY
 renderShortcut(shortcut);
 renderHistory();
 renderStats();
+audioDuckingInput.checked = audioDuckingEnabled;
 hydrateRewriteFromHistory();
 
 apiKeyInput.addEventListener('change', syncApiKey);
@@ -307,6 +311,12 @@ window.addEventListener('keyup', (event) => {
   updateShortcutModifierState(event, false);
   renderShortcutPreview();
 }, true);
+
+audioDuckingInput.addEventListener('change', () => {
+  audioDuckingEnabled = audioDuckingInput.checked;
+  localStorage.setItem(AUDIO_DUCKING_KEY, String(audioDuckingEnabled));
+  setStatus('success', audioDuckingEnabled ? 'Smooth volume ducking enabled.' : 'Smooth volume ducking disabled.');
+});
 
 autostartInput.addEventListener('change', async () => {
   try {
@@ -530,6 +540,10 @@ async function toggleRecording() {
       return;
     }
 
+    if (audioDuckingEnabled && isTauriRuntime) {
+      await invoke('start_audio_ducking');
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunks = [];
     recorder = new MediaRecorder(stream, { mimeType: pickMimeType() });
@@ -579,6 +593,9 @@ async function transcribeAndPaste() {
     recorder = null;
     chunks = [];
     recordingStartedAt = 0;
+    if (audioDuckingEnabled && isTauriRuntime) {
+      await invoke('restore_audio_ducking');
+    }
   }
 }
 

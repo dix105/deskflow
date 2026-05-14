@@ -10,7 +10,7 @@ use tauri::{
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL,
+    keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_VOLUME_DOWN, VK_VOLUME_UP,
 };
 
 #[derive(Debug, Deserialize)]
@@ -278,6 +278,41 @@ async fn rewrite_text(api_key: String, text: String, mode: String) -> Result<Str
     Ok(text)
 }
 
+
+#[tauri::command]
+fn start_audio_ducking() {
+    smooth_volume_keypress(true);
+}
+
+#[tauri::command]
+fn restore_audio_ducking() {
+    smooth_volume_keypress(false);
+}
+
+fn smooth_volume_keypress(duck: bool) {
+    #[cfg(not(windows))]
+    {
+        let _ = duck;
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows volume keys move in small OS-defined steps. Sending several
+        // taps with short delays creates a simple smooth duck/restore effect
+        // without permanently storing or mutating any extra audio state.
+        let key = if duck { VK_VOLUME_DOWN.0 as u8 } else { VK_VOLUME_UP.0 as u8 };
+        thread::spawn(move || {
+            for _ in 0..8 {
+                unsafe {
+                    keybd_event(key, 0, KEYBD_EVENT_FLAGS(0), 0);
+                    keybd_event(key, 0, KEYEVENTF_KEYUP, 0);
+                }
+                thread::sleep(Duration::from_millis(45));
+            }
+        });
+    }
+}
+
 #[tauri::command]
 fn paste_transcript(text: String) -> Result<(), String> {
     if text.trim().is_empty() {
@@ -386,7 +421,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             transcribe_and_paste,
             rewrite_text,
-            paste_transcript
+            paste_transcript,
+            start_audio_ducking,
+            restore_audio_ducking
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

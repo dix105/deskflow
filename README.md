@@ -12,7 +12,8 @@ Deskflow was created as a desktop-first dictation tool with a clean Flow-style i
 - Desktop microphone capture
 - Automatic transcription and paste into the active app
 - Local transcript history / scratchpad
-- Dictation stats: words per minute, last recording words, and total words spoken
+- Dictation stats: words per minute, average words, and total words spoken
+- Optional smooth audio ducking that lowers system volume during recording and restores it after
 - Dictionary vocabulary hints for better spelling
 - Rewrite modes for cleaning or reshaping text
 - Provider selection between Groq and ElevenLabs
@@ -125,6 +126,14 @@ Each transcript card shows:
 - transcript text
 - Copy action
 - Rewrite action
+
+### Smooth volume ducking
+
+The Settings drawer includes **Smooth volume ducking**. When enabled, Deskflow sends smooth volume-down steps when recording starts and matching volume-up steps after transcription finishes. This is intended to reduce background audio while speaking. The preference is stored locally under:
+
+```txt
+flowDeskAudioDucking
+```
 
 ### Dictation stats
 
