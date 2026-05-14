@@ -4,6 +4,7 @@ import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-sh
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 
 const DEFAULT_SHORTCUT = 'CommandOrControl+Alt+Space';
+const DEFAULT_POLISH_SHORTCUT = 'CommandOrControl+Shift+P';
 const HISTORY_KEY = 'flowDeskHistory';
 const VOCABULARY_KEY = 'flowDeskVocabulary';
 const PROVIDER_KEY = 'flowDeskProvider';
@@ -12,6 +13,7 @@ const SARVAM_KEY = 'sarvamApiKey';
 const TOTAL_WORDS_KEY = 'flowDeskTotalWordsSpoken';
 const AUDIO_DUCKING_KEY = 'flowDeskAudioDucking';
 const MEDIA_PAUSE_KEY = 'flowDeskPauseBackgroundMedia';
+const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -31,7 +33,8 @@ type HistoryItem = {
 let recorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];
 let shortcut = localStorage.getItem('shortcut') || DEFAULT_SHORTCUT;
-let capturingShortcut = false;
+let polishShortcut = localStorage.getItem(POLISH_SHORTCUT_KEY) || DEFAULT_POLISH_SHORTCUT;
+let captureTarget: 'dictation' | 'polish' | null = null;
 let pressedShortcutModifiers = new Set<string>();
 let transcriptionProvider = (localStorage.getItem(PROVIDER_KEY) as TranscriptionProvider) || 'groq';
 let historyItems: HistoryItem[] = loadHistory();
@@ -90,8 +93,8 @@ app.innerHTML = `
           <section class="quick-shortcuts" aria-label="Keyboard shortcuts">
             <button class="shortcut-card" data-view="transforms" type="button">
               <span>Polish text shortcut</span>
-              <strong><kbd>Cmd/Ctrl</kbd> + <kbd>Enter</kbd></strong>
-              <small>Open Polish text, paste text, press shortcut.</small>
+              <strong id="polishShortcutHome"><kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></strong>
+              <small>Select text anywhere, press shortcut, get polished text pasted back.</small>
             </button>
           </section>
 
@@ -168,7 +171,7 @@ app.innerHTML = `
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-sidebar"><p>SETTINGS</p><button class="active" type="button">☷ General</button><button type="button">▭ System</button><button type="button"># Vibe coding</button><button type="button">⚗ Experimental</button><hr><p>ACCOUNT</p><button type="button">◎ Account</button><button type="button">♙ Team</button><button type="button">▰ Plans and Billing</button></div>
-        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Shortcuts</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Smooth volume ducking</strong><span>Fade system audio down while recording, then restore it after.</span></div><input id="audioDucking" type="checkbox" /></label><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
+        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Dictation shortcut</strong><span>Hold shortcut and speak</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><div class="settings-row"><div><strong>Polish text shortcut</strong><span>Select text anywhere, then polish and paste back</span></div><button id="capturePolishShortcut" class="soft-btn" type="button"><span id="polishShortcutValue">Cmd/Ctrl + Shift + P</span></button><button id="savePolishShortcut" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Smooth volume ducking</strong><span>Fade system audio down while recording, then restore it after.</span></div><input id="audioDucking" type="checkbox" /></label><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
       </section>
     </aside>
 
@@ -189,6 +192,10 @@ const captureShortcutButton = document.querySelector<HTMLButtonElement>('#captur
 const captureShortcutMirrorButton = document.querySelector<HTMLButtonElement>('#captureShortcutMirror')!;
 const shortcutValue = document.querySelector<HTMLElement>('#shortcutValue')!;
 const shortcutValueMirror = document.querySelector<HTMLElement>('#shortcutValueMirror')!;
+const polishShortcutHome = document.querySelector<HTMLElement>('#polishShortcutHome')!;
+const polishShortcutValue = document.querySelector<HTMLElement>('#polishShortcutValue')!;
+const capturePolishShortcutButton = document.querySelector<HTMLButtonElement>('#capturePolishShortcut')!;
+const savePolishShortcutButton = document.querySelector<HTMLButtonElement>('#savePolishShortcut')!;
 const settingsButton = document.querySelector<HTMLButtonElement>('#settingsButton');
 const closeSettingsButton = document.querySelector<HTMLButtonElement>('#closeSettings')!;
 const drawerBackdrop = document.querySelector<HTMLDivElement>('#drawerBackdrop')!;
@@ -218,6 +225,7 @@ sarvamApiKeyInput.value = localStorage.getItem(SARVAM_KEY) || '';
 renderProvider();
 if (vocabularyInput) vocabularyInput.value = localStorage.getItem(VOCABULARY_KEY) || '';
 renderShortcut(shortcut);
+renderPolishShortcut(polishShortcut);
 renderHistory();
 renderStats();
 audioDuckingInput.checked = audioDuckingEnabled;
@@ -283,10 +291,12 @@ document.querySelectorAll<HTMLButtonElement>('[data-shortcut]').forEach((button)
   });
 });
 
-captureShortcutButton.addEventListener('click', beginShortcutCapture);
-captureShortcutMirrorButton.addEventListener('click', beginShortcutCapture);
+captureShortcutButton.addEventListener('click', () => beginShortcutCapture('dictation'));
+captureShortcutMirrorButton.addEventListener('click', () => beginShortcutCapture('dictation'));
+capturePolishShortcutButton.addEventListener('click', () => beginShortcutCapture('polish'));
 saveButton.addEventListener('click', () => installShortcut(shortcut));
 saveMirrorButton.addEventListener('click', () => installShortcut(shortcut));
+savePolishShortcutButton.addEventListener('click', () => installPolishShortcut(polishShortcut));
 toggleButton.addEventListener('click', () => toggleRecording());
 miniStopButton.addEventListener('click', () => toggleRecording());
 settingsButton?.addEventListener('click', openSettings);
@@ -296,17 +306,17 @@ openRewriteButton?.addEventListener('click', () => setView('transforms'));
 startFromScratchpadButton.addEventListener('click', () => toggleRecording());
 
 window.addEventListener('keydown', async (event) => {
-  if (!capturingShortcut && event.key === 'Escape') {
+  if (!captureTarget && event.key === 'Escape') {
     closeSettings();
     return;
   }
 
-  if (!capturingShortcut) return;
+  if (!captureTarget) return;
   event.preventDefault();
   event.stopPropagation();
 
   if (event.key === 'Escape') {
-    finishShortcutCapture(shortcut, false);
+    finishShortcutCapture(currentCaptureShortcut(), false);
     setStatus('idle', 'Shortcut capture cancelled.');
     return;
   }
@@ -323,7 +333,7 @@ window.addEventListener('keydown', async (event) => {
 }, true);
 
 window.addEventListener('keyup', (event) => {
-  if (!capturingShortcut) return;
+  if (!captureTarget) return;
   updateShortcutModifierState(event, false);
   renderShortcutPreview();
 }, true);
@@ -398,32 +408,44 @@ function setView(view: ViewName) {
   if (view === 'transforms') hydrateRewriteFromHistory();
 }
 
-async function beginShortcutCapture() {
-  capturingShortcut = true;
+async function beginShortcutCapture(target: 'dictation' | 'polish') {
+  captureTarget = target;
   pressedShortcutModifiers = new Set<string>();
-  captureShortcutButton.classList.add('capturing');
-  captureShortcutMirrorButton.classList.add('capturing');
-  shortcutValue.textContent = 'Hold Ctrl/Alt, then press a key…';
-  shortcutValueMirror.textContent = 'Hold Ctrl/Alt, then press a key…';
+  const targetButtons = target === 'dictation' ? [captureShortcutButton, captureShortcutMirrorButton] : [capturePolishShortcutButton];
+  targetButtons.forEach((button) => button.classList.add('capturing'));
+  setShortcutCaptureLabel('Hold Ctrl/Alt, then press a key…');
 
-  // Avoid the currently registered global shortcut stealing the key event while
-  // the user is trying to record a new shortcut.
-  if (isTauriRuntime && shortcut && await isRegistered(shortcut)) {
-    await unregister(shortcut);
+  const current = target === 'dictation' ? shortcut : polishShortcut;
+  if (isTauriRuntime && current && await isRegistered(current)) {
+    await unregister(current);
   }
 }
 
 function finishShortcutCapture(next: string, shouldSave: boolean) {
-  capturingShortcut = false;
+  const target = captureTarget;
+  captureTarget = null;
   pressedShortcutModifiers = new Set<string>();
   captureShortcutButton.classList.remove('capturing');
   captureShortcutMirrorButton.classList.remove('capturing');
-  shortcut = next;
-  renderShortcut(next);
-  localStorage.setItem('shortcut', next);
+  capturePolishShortcutButton.classList.remove('capturing');
+
+  if (target === 'polish') {
+    polishShortcut = next;
+    renderPolishShortcut(next);
+    localStorage.setItem(POLISH_SHORTCUT_KEY, next);
+  } else {
+    shortcut = next;
+    renderShortcut(next);
+    localStorage.setItem('shortcut', next);
+  }
+
   setStatus('success', shouldSave
     ? `Shortcut captured: ${formatShortcutLabel(next)}. Click Save to register it.`
     : `Shortcut restored: ${formatShortcutLabel(next)}`);
+}
+
+function currentCaptureShortcut() {
+  return captureTarget === 'polish' ? polishShortcut : shortcut;
 }
 
 function openSettings() {
@@ -449,13 +471,22 @@ function setStatus(kind: StatusKind, message: string) {
 }
 
 function renderShortcut(value: string) {
-  const html = value
+  const html = shortcutHtml(value);
+  shortcutValue.innerHTML = html;
+  shortcutValueMirror.innerHTML = html;
+}
+
+function renderPolishShortcut(value: string) {
+  const html = shortcutHtml(value);
+  polishShortcutHome.innerHTML = html;
+  polishShortcutValue.innerHTML = html;
+}
+
+function shortcutHtml(value: string) {
+  return value
     .split('+')
     .map((part) => `<kbd>${displayShortcutPart(part.trim())}</kbd>`)
     .join('<span class="shortcut-plus">+</span>');
-
-  shortcutValue.innerHTML = html;
-  shortcutValueMirror.innerHTML = html;
 }
 
 function displayShortcutPart(part: string) {
@@ -510,6 +541,14 @@ function shortcutModifierParts(event?: KeyboardEvent) {
 function renderShortcutPreview() {
   const parts = shortcutModifierParts();
   const label = parts.length ? `${formatShortcutLabel(parts.join('+'))} + …` : 'Hold Ctrl/Alt, then press a key…';
+  setShortcutCaptureLabel(label);
+}
+
+function setShortcutCaptureLabel(label: string) {
+  if (captureTarget === 'polish') {
+    polishShortcutValue.textContent = label;
+    return;
+  }
   shortcutValue.textContent = label;
   shortcutValueMirror.textContent = label;
 }
@@ -544,6 +583,59 @@ async function installShortcut(next: string) {
     setStatus('success', `Shortcut registered: ${formatShortcutLabel(next)}`);
   } catch (error) {
     setStatus('error', `Could not register shortcut: ${String(error)}`);
+  }
+}
+
+
+async function installPolishShortcut(next: string) {
+  try {
+    if (!isTauriRuntime) {
+      polishShortcut = next;
+      localStorage.setItem(POLISH_SHORTCUT_KEY, next);
+      renderPolishShortcut(next);
+      setStatus('idle', `Polish shortcut saved as ${formatShortcutLabel(next)}. It will register inside the desktop app.`);
+      return;
+    }
+
+    if (polishShortcut && await isRegistered(polishShortcut)) {
+      await unregister(polishShortcut);
+    }
+    await register(next, () => polishSelectedText());
+    polishShortcut = next;
+    localStorage.setItem(POLISH_SHORTCUT_KEY, next);
+    renderPolishShortcut(next);
+    setStatus('success', `Polish shortcut registered: ${formatShortcutLabel(next)}`);
+  } catch (error) {
+    setStatus('error', `Could not register polish shortcut: ${String(error)}`);
+  }
+}
+
+async function polishSelectedText() {
+  syncApiKey();
+  if (!apiKeyInput.value.trim()) {
+    setStatus('error', 'Add your Groq API key first.');
+    return;
+  }
+
+  try {
+    setStatus('working', 'Polishing selected text…');
+    const text = isTauriRuntime
+      ? await invoke<string>('copy_selected_text')
+      : rewriteInput.value.trim();
+    if (!text.trim()) {
+      setStatus('error', 'Select text first, then press the polish shortcut.');
+      return;
+    }
+    const polished = await invoke<string>('rewrite_text', {
+      apiKey: apiKeyInput.value.trim(),
+      text,
+      mode: 'polish',
+    });
+    if (isTauriRuntime) await invoke('paste_transcript', { text: polished });
+    else rewriteOutput.textContent = polished;
+    setStatus('success', 'Selected text polished and pasted.');
+  } catch (error) {
+    setStatus('error', String(error));
   }
 }
 
@@ -869,4 +961,5 @@ async function loadAutostartState() {
 }
 
 installShortcut(shortcut);
+installPolishShortcut(polishShortcut);
 loadAutostartState();

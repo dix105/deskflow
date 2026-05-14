@@ -15,6 +15,7 @@ Deskflow was created as a desktop-first dictation tool with a clean Flow-style i
 - Dictation stats: words per minute, average words, and total words spoken
 - Optional smooth audio ducking that lowers system volume during recording and restores it after
 - Optional background media pause/resume while recording
+- Global polish shortcut that copies selected text, polishes it, and pastes it back
 - Dictionary vocabulary hints for better spelling
 - Rewrite modes for cleaning or reshaping text
 - Provider selection between Groq and ElevenLabs
@@ -128,6 +129,26 @@ Each transcript card shows:
 - Copy action
 - Rewrite action
 
+### Global polish shortcut
+
+Settings includes a separate **Polish text shortcut**. Default:
+
+```txt
+CommandOrControl + Shift + P
+```
+
+Flow:
+
+1. Select text in any app.
+2. Press the polish shortcut.
+3. Deskflow copies the selection, rewrites it with Polish writing mode, and pastes it back.
+
+The shortcut is stored locally under:
+
+```txt
+flowDeskPolishShortcut
+```
+
 ### Background media controls
 
 Settings includes two separate controls:
@@ -170,7 +191,7 @@ llama-3.3-70b-versatile
 Modes:
 
 - Clean up
-- Polish writing (`Cmd/Ctrl + Enter` inside the rewrite input)
+- Polish writing (`Cmd/Ctrl + Enter` inside the rewrite input, or the global configurable Polish text shortcut)
 - Professional
 - Shorter
 - Friendly

@@ -332,6 +332,36 @@ fn smooth_volume_keypress(duck: bool) {
     }
 }
 
+
+#[tauri::command]
+fn copy_selected_text() -> Result<String, String> {
+    send_ctrl_c();
+    thread::sleep(Duration::from_millis(180));
+    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard unavailable: {e}"))?;
+    clipboard
+        .get_text()
+        .map_err(|e| format!("Could not read selected text from clipboard: {e}"))
+}
+
+fn send_ctrl_c() {
+    #[cfg(not(windows))]
+    {
+        return;
+    }
+
+    #[cfg(windows)]
+    {
+    const C_KEY: u8 = 0x43;
+
+    unsafe {
+        keybd_event(VK_CONTROL.0 as u8, 0, KEYBD_EVENT_FLAGS(0), 0);
+        keybd_event(C_KEY, 0, KEYBD_EVENT_FLAGS(0), 0);
+        keybd_event(C_KEY, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_CONTROL.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+    }
+    }
+}
+
 #[tauri::command]
 fn paste_transcript(text: String) -> Result<(), String> {
     if text.trim().is_empty() {
@@ -441,6 +471,7 @@ pub fn run() {
             transcribe_and_paste,
             rewrite_text,
             paste_transcript,
+            copy_selected_text,
             start_audio_ducking,
             restore_audio_ducking,
             pause_background_media,
