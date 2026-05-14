@@ -329,8 +329,17 @@ fn duck_system_volume() -> Result<(), String> {
         let endpoint = default_audio_endpoint()?;
         let current = endpoint.GetMasterVolumeLevelScalar().map_err(|e| format!("Could not read system volume: {e}"))?;
         *ORIGINAL_SYSTEM_VOLUME.lock().map_err(|_| "Volume state lock failed".to_string())? = Some(current);
-        let ducked = (current * 0.35).max(0.08);
-        fade_system_volume(current, ducked)?;
+        // Keep ducking gentle: if volume is already low, do not push it
+        // toward mute. Otherwise reduce by roughly 20 percentage points,
+        // capped at 70% of current volume for a natural background dip.
+        let ducked = if current <= 0.25 {
+            current
+        } else {
+            (current - 0.20).max(current * 0.70).max(0.25)
+        };
+        if (current - ducked).abs() > 0.01 {
+            fade_system_volume(current, ducked)?;
+        }
         Ok(())
     }
 }
