@@ -2,26 +2,48 @@ use arboard::Clipboard;
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 #[cfg(windows)]
-use std::sync::Mutex;
+use std::{collections::HashSet, sync::{Mutex, OnceLock, atomic::{AtomicBool, Ordering}}};
 use std::{thread, time::Duration};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     Manager, WindowEvent,
 };
+#[cfg(windows)]
+use tauri::Emitter;
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(windows)]
 use windows::Win32::{
+    Foundation::{LPARAM, LRESULT, WPARAM},
     Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator},
     Media::Audio::Endpoints::IAudioEndpointVolume,
     System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED},
-    UI::Input::KeyboardAndMouse::{
-        keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_MEDIA_PLAY_PAUSE,
+    UI::{
+        Input::KeyboardAndMouse::{
+            keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_MEDIA_PLAY_PAUSE,
+            VK_MENU, VK_RETURN, VK_SHIFT, VK_SPACE,
+        },
+        WindowsAndMessaging::{
+            CallNextHookEx, GetMessageW, SetWindowsHookExW, HHOOK, KBDLLHOOKSTRUCT, MSG,
+            WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        },
     },
 };
 
 #[cfg(windows)]
 static ORIGINAL_SYSTEM_VOLUME: Mutex<Option<f32>> = Mutex::new(None);
+#[cfg(windows)]
+static HOOK_STARTED: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+static HOOK_STATE: OnceLock<Mutex<PushToTalkHookState>> = OnceLock::new();
+
+#[cfg(windows)]
+struct PushToTalkHookState {
+    app: tauri::AppHandle,
+    shortcut_keys: Vec<u32>,
+    keys_down: HashSet<u32>,
+    active: bool,
+}
 
 #[derive(Debug, Deserialize)]
 struct GroqTranscription {
@@ -291,6 +313,112 @@ async fn rewrite_text(api_key: String, text: String, mode: String) -> Result<Str
 
 
 
+
+#[tauri::command]
+fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        let _ = shortcut;
+        Err("Native push-to-talk hook is only available on Windows".into())
+    }
+
+    #[cfg(windows)]
+    {
+        let shortcut_keys = parse_shortcut_keys(&shortcut)?;
+        let state = HOOK_STATE.get_or_init(|| Mutex::new(PushToTalkHookState {
+            app: app.clone(),
+            shortcut_keys: Vec::new(),
+            keys_down: HashSet::new(),
+            active: false,
+        }));
+
+        {
+            let mut guard = state.lock().map_err(|_| "Push-to-talk hook state lock failed".to_string())?;
+            guard.app = app;
+            guard.shortcut_keys = shortcut_keys;
+            guard.keys_down.clear();
+            guard.active = false;
+        }
+
+        if !HOOK_STARTED.swap(true, Ordering::SeqCst) {
+            thread::spawn(|| unsafe {
+                match SetWindowsHookExW(WH_KEYBOARD_LL, Some(push_to_talk_keyboard_proc), None, 0) {
+                    Ok(_hook) => {
+                        let mut message = MSG::default();
+                        while GetMessageW(&mut message, None, 0, 0).as_bool() {}
+                    }
+                    Err(error) => {
+                        HOOK_STARTED.store(false, Ordering::SeqCst);
+                        eprintln!("Failed to install push-to-talk hook: {error}");
+                    }
+                }
+            });
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn push_to_talk_keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let event = wparam.0 as u32;
+        let key = (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode;
+        let is_down = event == WM_KEYDOWN || event == WM_SYSKEYDOWN;
+        let is_up = event == WM_KEYUP || event == WM_SYSKEYUP;
+
+        if is_down || is_up {
+            if let Some(state) = HOOK_STATE.get() {
+                if let Ok(mut guard) = state.lock() {
+                    if is_down {
+                        guard.keys_down.insert(key);
+                        if !guard.active && guard.shortcut_keys.iter().all(|part| guard.keys_down.contains(part)) {
+                            guard.active = true;
+                            let _ = guard.app.emit("push-to-talk-down", ());
+                        }
+                    } else {
+                        guard.keys_down.remove(&key);
+                        if guard.active && guard.shortcut_keys.contains(&key) {
+                            guard.active = false;
+                            let _ = guard.app.emit("push-to-talk-up", ());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    CallNextHookEx(None::<HHOOK>, code, wparam, lparam)
+}
+
+#[cfg(windows)]
+fn parse_shortcut_keys(shortcut: &str) -> Result<Vec<u32>, String> {
+    let keys = shortcut
+        .split('+')
+        .map(|part| shortcut_part_vk(part.trim()).ok_or_else(|| format!("Unsupported shortcut key: {part}")))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if keys.len() < 2 {
+        return Err("Shortcut must include at least one modifier and one key".into());
+    }
+
+    Ok(keys)
+}
+
+#[cfg(windows)]
+fn shortcut_part_vk(part: &str) -> Option<u32> {
+    match part {
+        "CommandOrControl" | "Control" | "Ctrl" => Some(VK_CONTROL.0 as u32),
+        "Alt" => Some(VK_MENU.0 as u32),
+        "Shift" => Some(VK_SHIFT.0 as u32),
+        "Space" => Some(VK_SPACE.0 as u32),
+        "Enter" | "Return" => Some(VK_RETURN.0 as u32),
+        key if key.len() == 1 => key.chars().next().map(|char| char.to_ascii_uppercase() as u32),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 fn pause_background_media() {
     send_media_play_pause();
@@ -534,6 +662,7 @@ pub fn run() {
             rewrite_text,
             paste_transcript,
             copy_selected_text,
+            install_push_to_talk_hook,
             start_audio_ducking,
             restore_audio_ducking,
             pause_background_media,

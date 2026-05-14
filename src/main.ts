@@ -1,5 +1,6 @@
 import './style.css';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 
@@ -43,6 +44,7 @@ let selectedHistoryId = historyItems[0]?.id || '';
 let recordingStartedAt = 0;
 let lastRecordingToggleAt = 0;
 let recordingTransitionInFlight = false;
+let stopAfterStartRequested = false;
 let isAudioDucked = false;
 let totalWordsSpoken = loadTotalWordsSpoken(historyItems);
 let audioDuckingEnabled = true;
@@ -234,6 +236,7 @@ renderHistory();
 renderStats();
 pauseBackgroundMediaInput.checked = pauseBackgroundMediaEnabled;
 hydrateRewriteFromHistory();
+setupPushToTalkListeners();
 
 apiKeyInput.addEventListener('change', syncApiKey);
 drawerApiKeyInput.addEventListener('change', syncApiKey);
@@ -571,6 +574,17 @@ async function installShortcut(next: string) {
       return;
     }
 
+    try {
+      await invoke('install_push_to_talk_hook', { shortcut: next });
+      shortcut = next;
+      localStorage.setItem('shortcut', next);
+      renderShortcut(next);
+      setStatus('success', `Push-to-talk shortcut registered: ${formatShortcutLabel(next)}`);
+      return;
+    } catch {
+      // Non-Windows or hook unavailable: fall back to Tauri's toggle shortcut.
+    }
+
     if (shortcut && await isRegistered(shortcut)) {
       await unregister(shortcut);
     }
@@ -637,6 +651,31 @@ async function polishSelectedText() {
   }
 }
 
+
+let pushToTalkListenersReady = false;
+
+async function setupPushToTalkListeners() {
+  if (!isTauriRuntime || pushToTalkListenersReady) return;
+  pushToTalkListenersReady = true;
+
+  await listen('push-to-talk-down', () => startRecordingFromPushToTalk());
+  await listen('push-to-talk-up', () => stopRecordingFromPushToTalk());
+}
+
+function startRecordingFromPushToTalk() {
+  if (recorder?.state === 'recording' || recordingTransitionInFlight) return;
+  stopAfterStartRequested = false;
+  toggleRecording();
+}
+
+function stopRecordingFromPushToTalk() {
+  if (recorder?.state === 'recording') {
+    recorder.stop();
+    return;
+  }
+  if (recordingTransitionInFlight) stopAfterStartRequested = true;
+}
+
 async function testAudioDucking() {
   if (!isTauriRuntime) {
     setStatus('idle', 'Audio ducking test runs inside the desktop app.');
@@ -698,7 +737,11 @@ async function toggleRecording() {
 
     recordingStartedAt = Date.now();
     recorder.start();
-    setStatus('recording', 'Recording… press shortcut again or click stop when done.');
+    setStatus('recording', 'Recording… release shortcut or click stop when done.');
+    if (stopAfterStartRequested) {
+      stopAfterStartRequested = false;
+      recorder.stop();
+    }
   } catch (error) {
     await restoreAudioAfterDelay();
     if (pauseBackgroundMediaEnabled && isTauriRuntime) {
