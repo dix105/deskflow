@@ -131,8 +131,8 @@ Each transcript card shows:
 The Home screen summarizes speaking activity locally:
 
 - Total words spoken across saved dictations
-- Last recording speed in words per minute
-- Last recording word count
+- Average speed in words per minute
+- Average words per recording
 
 New recordings save their duration and WPM alongside the transcript. The all-time total is stored locally under:
 

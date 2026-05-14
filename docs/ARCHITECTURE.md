@@ -24,5 +24,5 @@
 ## Dictation stats
 - Recording duration is measured in `src/main.ts` from recorder start until transcription begins.
 - Per-recording WPM is calculated from transcript word count and recording duration.
-- The Home stats strip renders total words spoken, latest WPM, and latest word count.
+- The Home stats strip renders total words spoken, average WPM, and average words per recording.
 - Scratchpad history shows word count, WPM, and recording duration per new transcript.

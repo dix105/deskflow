@@ -80,8 +80,8 @@ app.innerHTML = `
 
           <section class="stats-strip" aria-label="Dictation stats">
             <article><span>Total words spoken</span><strong id="totalWordsSpoken">0</strong><small>Across saved dictations</small></article>
-            <article><span>Last speed</span><strong id="lastWordsPerMinute">—</strong><small>Words per minute</small></article>
-            <article><span>Last recording</span><strong id="lastRecordingWords">—</strong><small>Words captured</small></article>
+            <article><span>Average speed</span><strong id="averageWordsPerMinute">—</strong><small>Words per minute</small></article>
+            <article><span>Average words</span><strong id="averageWordsPerRecording">—</strong><small>Per recording</small></article>
           </section>
 
           <section class="home-grid">
@@ -179,8 +179,8 @@ const settingsDrawer = document.querySelector<HTMLElement>('#settingsDrawer')!;
 const autostartInput = document.querySelector<HTMLInputElement>('#autostart')!;
 const statusBox = document.querySelector<HTMLElement>('#status')!;
 const totalWordsSpokenEl = document.querySelector<HTMLElement>('#totalWordsSpoken')!;
-const lastWordsPerMinuteEl = document.querySelector<HTMLElement>('#lastWordsPerMinute')!;
-const lastRecordingWordsEl = document.querySelector<HTMLElement>('#lastRecordingWords')!;
+const averageWordsPerMinuteEl = document.querySelector<HTMLElement>('#averageWordsPerMinute')!;
+const averageWordsPerRecordingEl = document.querySelector<HTMLElement>('#averageWordsPerRecording')!;
 const recordOrb = document.querySelector<HTMLElement>('#recordOrb')!;
 const miniWidget = document.querySelector<HTMLElement>('#miniWidget')!;
 const miniStopButton = document.querySelector<HTMLButtonElement>('#miniStop')!;
@@ -769,10 +769,30 @@ function formatDuration(durationMs: number) {
 }
 
 function renderStats() {
-  const latest = historyItems[0];
   totalWordsSpokenEl.textContent = numberFormatter.format(totalWordsSpoken);
-  lastWordsPerMinuteEl.textContent = latest?.wordsPerMinute ? String(latest.wordsPerMinute) : '—';
-  lastRecordingWordsEl.textContent = latest ? String(wordCount(latest.text)) : '—';
+  averageWordsPerMinuteEl.textContent = formatOptionalNumber(averageWordsPerMinute(historyItems));
+  averageWordsPerRecordingEl.textContent = formatOptionalNumber(averageWordsPerRecording(historyItems));
+}
+
+function averageWordsPerMinute(items: HistoryItem[]) {
+  const totals = items.reduce((acc, item) => {
+    const words = wordCount(item.text);
+    const durationMs = item.durationMs || 0;
+    if (!words || !durationMs) return acc;
+    return { words: acc.words + words, durationMs: acc.durationMs + durationMs };
+  }, { words: 0, durationMs: 0 });
+
+  return calculateWordsPerMinute(totals.words, totals.durationMs);
+}
+
+function averageWordsPerRecording(items: HistoryItem[]) {
+  if (!items.length) return 0;
+  const words = items.reduce((sum, item) => sum + wordCount(item.text), 0);
+  return Math.round(words / items.length);
+}
+
+function formatOptionalNumber(value: number) {
+  return value ? numberFormatter.format(value) : '—';
 }
 
 function escapeHtml(value: string) {
