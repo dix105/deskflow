@@ -158,7 +158,7 @@ Settings includes two separate controls:
 
 ### Smooth volume ducking
 
-The Settings drawer includes **Smooth volume ducking**. When enabled, Deskflow sends smooth volume-down steps when recording starts and matching volume-up steps after transcription finishes. This is intended to reduce background audio while speaking. The preference is stored locally under:
+The Settings drawer includes **Smooth volume ducking**. When enabled, Deskflow saves the current Windows system volume, smoothly lowers it while recording, then restores the exact saved volume after transcription finishes. This is intended to reduce background audio while speaking. The preference is stored locally under:
 
 ```txt
 flowDeskAudioDucking

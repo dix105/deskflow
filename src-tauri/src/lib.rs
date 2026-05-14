@@ -1,6 +1,8 @@
 use arboard::Clipboard;
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
+#[cfg(windows)]
+use std::sync::Mutex;
 use std::{thread, time::Duration};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -9,9 +11,17 @@ use tauri::{
 };
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(windows)]
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_MEDIA_PLAY_PAUSE, VK_VOLUME_DOWN, VK_VOLUME_UP,
+use windows::Win32::{
+    Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator},
+    Media::Audio::Endpoints::IAudioEndpointVolume,
+    System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED},
+    UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_MEDIA_PLAY_PAUSE,
+    },
 };
+
+#[cfg(windows)]
+static ORIGINAL_SYSTEM_VOLUME: Mutex<Option<f32>> = Mutex::new(None);
 
 #[derive(Debug, Deserialize)]
 struct GroqTranscription {
@@ -299,37 +309,79 @@ fn send_media_play_pause() {
 }
 
 #[tauri::command]
-fn start_audio_ducking() {
-    smooth_volume_keypress(true);
+fn start_audio_ducking() -> Result<(), String> {
+    duck_system_volume()
 }
 
 #[tauri::command]
-fn restore_audio_ducking() {
-    smooth_volume_keypress(false);
+fn restore_audio_ducking() -> Result<(), String> {
+    restore_system_volume()
 }
 
-fn smooth_volume_keypress(duck: bool) {
+fn duck_system_volume() -> Result<(), String> {
     #[cfg(not(windows))]
     {
-        let _ = duck;
+        Ok(())
     }
 
     #[cfg(windows)]
-    {
-        // Windows volume keys move in small OS-defined steps. Sending several
-        // taps with short delays creates a simple smooth duck/restore effect
-        // without permanently storing or mutating any extra audio state.
-        let key = if duck { VK_VOLUME_DOWN.0 as u8 } else { VK_VOLUME_UP.0 as u8 };
-        thread::spawn(move || {
-            for _ in 0..8 {
-                unsafe {
-                    keybd_event(key, 0, KEYBD_EVENT_FLAGS(0), 0);
-                    keybd_event(key, 0, KEYEVENTF_KEYUP, 0);
-                }
-                thread::sleep(Duration::from_millis(45));
-            }
-        });
+    unsafe {
+        let endpoint = default_audio_endpoint()?;
+        let current = endpoint.GetMasterVolumeLevelScalar().map_err(|e| format!("Could not read system volume: {e}"))?;
+        *ORIGINAL_SYSTEM_VOLUME.lock().map_err(|_| "Volume state lock failed".to_string())? = Some(current);
+        let ducked = (current * 0.35).max(0.08);
+        fade_system_volume(current, ducked)?;
+        Ok(())
     }
+}
+
+fn restore_system_volume() -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    unsafe {
+        let original = ORIGINAL_SYSTEM_VOLUME
+            .lock()
+            .map_err(|_| "Volume state lock failed".to_string())?
+            .take();
+        let Some(original) = original else { return Ok(()); };
+        let endpoint = default_audio_endpoint()?;
+        let current = endpoint.GetMasterVolumeLevelScalar().map_err(|e| format!("Could not read system volume: {e}"))?;
+        fade_system_volume(current, original)?;
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+unsafe fn default_audio_endpoint() -> Result<IAudioEndpointVolume, String> {
+    CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok();
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+        .map_err(|e| format!("Could not create audio device enumerator: {e}"))?;
+    let device = enumerator
+        .GetDefaultAudioEndpoint(eRender, eConsole)
+        .map_err(|e| format!("Could not get default audio endpoint: {e}"))?;
+    device
+        .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
+        .map_err(|e| format!("Could not open system volume control: {e}"))
+}
+
+#[cfg(windows)]
+unsafe fn fade_system_volume(from: f32, to: f32) -> Result<(), String> {
+    let endpoint = default_audio_endpoint()?;
+    let steps = 10;
+    for step in 1..=steps {
+        let progress = step as f32 / steps as f32;
+        let value = from + ((to - from) * progress);
+        endpoint
+            .SetMasterVolumeLevelScalar(value.clamp(0.0, 1.0), core::ptr::null())
+            .map_err(|e| format!("Could not set system volume: {e}"))?;
+        thread::sleep(Duration::from_millis(35));
+    }
+    CoUninitialize();
+    Ok(())
 }
 
 

@@ -679,6 +679,12 @@ async function toggleRecording() {
     recorder.start();
     setStatus('recording', 'Recording… press shortcut or click stop when done.');
   } catch (error) {
+    if (audioDuckingEnabled && isTauriRuntime) {
+      await invoke('restore_audio_ducking');
+    }
+    if (pauseBackgroundMediaEnabled && isTauriRuntime) {
+      await invoke('resume_background_media');
+    }
     setStatus('error', `Mic error: ${String(error)}`);
   }
 }
