@@ -57,6 +57,7 @@ let streamingSocket: WebSocket | null = null;
 let streamingTranscript = '';
 let streamingFinalParts: string[] = [];
 let streamingLastPastedLength = 0;
+let pushToTalkListenersReady = false;
 const isTauriRuntime = '__TAURI_INTERNALS__' in window;
 const numberFormatter = new Intl.NumberFormat();
 
@@ -699,8 +700,6 @@ async function polishSelectedText() {
   }
 }
 
-
-let pushToTalkListenersReady = false;
 
 async function setupPushToTalkListeners() {
   if (!isTauriRuntime || pushToTalkListenersReady) return;
