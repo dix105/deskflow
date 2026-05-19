@@ -4,7 +4,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 #[cfg(windows)]
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 #[cfg(windows)]
 use std::{collections::HashSet, sync::atomic::{AtomicBool, Ordering}};
 use std::{fs, path::PathBuf, thread, time::Duration};
@@ -53,7 +53,8 @@ static NATIVE_RECORDER: OnceLock<Mutex<Option<NativeRecordingState>>> = OnceLock
 
 #[cfg(windows)]
 struct NativeRecordingState {
-    stream: cpal::Stream,
+    stop_tx: mpsc::Sender<()>,
+    done_rx: mpsc::Receiver<()>,
     samples: Arc<Mutex<Vec<i16>>>,
     sample_rate: u32,
     channels: u16,
@@ -228,16 +229,79 @@ fn start_native_recording() -> Result<(), String> {
         return Ok(());
     }
 
+    let samples = Arc::new(Mutex::new(Vec::<i16>::new()));
+    let thread_samples = samples.clone();
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<(u32, u16), String>>();
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+
+    thread::spawn(move || {
+        start_native_recording_thread(thread_samples, stop_rx, ready_tx);
+        let _ = done_tx.send(());
+    });
+
+    let (sample_rate, channels) = ready_rx
+        .recv_timeout(Duration::from_secs(3))
+        .map_err(|_| "Native mic did not start in time".to_string())??;
+
+    *guard = Some(NativeRecordingState { stop_tx, done_rx, samples, sample_rate, channels });
+    Ok(())
+    }
+}
+
+#[tauri::command]
+fn stop_native_recording() -> Result<Vec<u8>, String> {
+    #[cfg(not(windows))]
+    {
+        return Err("Native mic capture is only available on Windows right now".into());
+    }
+
+    #[cfg(windows)]
+    {
+    let recorder = NATIVE_RECORDER.get_or_init(|| Mutex::new(None));
+    let state = recorder.lock().map_err(|_| "Native recorder lock failed".to_string())?.take();
+    let Some(state) = state else { return Err("Native recording was not active".into()); };
+    let _ = state.stop_tx.send(());
+    let _ = state.done_rx.recv_timeout(Duration::from_secs(2));
+    let samples = state.samples.lock().map_err(|_| "Native audio buffer lock failed".to_string())?.clone();
+    if samples.is_empty() {
+        return Err("Native recording captured no audio".into());
+    }
+    Ok(wav_pcm16_bytes(&samples, state.sample_rate, state.channels))
+    }
+}
+
+#[cfg(windows)]
+fn start_native_recording_thread(
+    samples: Arc<Mutex<Vec<i16>>>,
+    stop_rx: mpsc::Receiver<()>,
+    ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
+) {
+    let error_tx = ready_tx.clone();
+    let result = start_native_recording_stream(samples, stop_rx, ready_tx);
+    if let Err(error) = result {
+        let _ = error_tx.send(Err(error));
+    }
+}
+
+#[cfg(windows)]
+fn start_native_recording_stream(
+    samples: Arc<Mutex<Vec<i16>>>,
+    stop_rx: mpsc::Receiver<()>,
+    ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
+) -> Result<(), String> {
     let host = cpal::default_host();
     let device = host.default_input_device().ok_or_else(|| "No default input microphone found".to_string())?;
     let supported = device.default_input_config().map_err(|e| format!("Could not read mic config: {e}"))?;
     let sample_rate = supported.sample_rate().0;
     let channels = supported.channels();
     let config: cpal::StreamConfig = supported.clone().into();
-    let samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(sample_rate as usize * channels as usize * 30)));
+    if let Ok(mut guard) = samples.lock() {
+        guard.reserve(sample_rate as usize * channels as usize * 30);
+    }
+
     let writer = samples.clone();
     let error_fn = |err| eprintln!("native mic stream error: {err}");
-
     let stream = match supported.sample_format() {
         cpal::SampleFormat::I16 => device.build_input_stream(
             &config,
@@ -262,30 +326,12 @@ fn start_native_recording() -> Result<(), String> {
     .map_err(|e| format!("Could not open native mic stream: {e}"))?;
 
     stream.play().map_err(|e| format!("Could not start native mic stream: {e}"))?;
-    *guard = Some(NativeRecordingState { stream, samples, sample_rate, channels });
+    // Tell the command thread the mic is genuinely open before we block for stop.
+    // `cpal::Stream` stays owned by this thread the entire time.
+    let _ = ready_tx.send(Ok((sample_rate, channels)));
+    let _ = stop_rx.recv();
+    drop(stream);
     Ok(())
-    }
-}
-
-#[tauri::command]
-fn stop_native_recording() -> Result<Vec<u8>, String> {
-    #[cfg(not(windows))]
-    {
-        return Err("Native mic capture is only available on Windows right now".into());
-    }
-
-    #[cfg(windows)]
-    {
-    let recorder = NATIVE_RECORDER.get_or_init(|| Mutex::new(None));
-    let state = recorder.lock().map_err(|_| "Native recorder lock failed".to_string())?.take();
-    let Some(state) = state else { return Err("Native recording was not active".into()); };
-    drop(state.stream);
-    let samples = state.samples.lock().map_err(|_| "Native audio buffer lock failed".to_string())?.clone();
-    if samples.is_empty() {
-        return Err("Native recording captured no audio".into());
-    }
-    Ok(wav_pcm16_bytes(&samples, state.sample_rate, state.channels))
-    }
 }
 
 #[cfg(windows)]
