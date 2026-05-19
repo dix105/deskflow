@@ -714,20 +714,6 @@ async function installShortcut(next: string) {
       return;
     }
 
-    try {
-      if (shortcut && await isRegistered(shortcut)) {
-        await unregister(shortcut);
-      }
-      await invoke('install_push_to_talk_hook', { shortcut: next });
-      shortcut = next;
-      localStorage.setItem('shortcut', next);
-      renderShortcut(next);
-      setStatus('success', `Push-to-talk shortcut registered: ${formatShortcutLabel(next)}`);
-      return;
-    } catch {
-      // Non-Windows or hook unavailable: fall back to Tauri's toggle shortcut.
-    }
-
     if (shortcut && await isRegistered(shortcut)) {
       await unregister(shortcut);
     }
@@ -735,9 +721,9 @@ async function installShortcut(next: string) {
     shortcut = next;
     localStorage.setItem('shortcut', next);
     renderShortcut(next);
-    setStatus('success', `Shortcut registered: ${formatShortcutLabel(next)}`);
+    setStatus('success', `Recording shortcut registered: ${formatShortcutLabel(next)}`);
   } catch (error) {
-    setStatus('error', `Could not register shortcut: ${String(error)}`);
+    setStatus('error', `Could not register recording shortcut: ${String(error)}`);
   }
 }
 
