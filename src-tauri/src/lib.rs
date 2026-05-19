@@ -28,8 +28,9 @@ use windows::Win32::{
     UI::{
         Input::KeyboardAndMouse::{
             keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, RegisterHotKey, UnregisterHotKey,
-            HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_SHIFT, VK_CONTROL, VK_MEDIA_PLAY_PAUSE,
-            VK_MENU, VK_RETURN, VK_SHIFT, VK_SPACE,
+            HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_SHIFT, VK_CONTROL, VK_LCONTROL,
+            VK_LMENU, VK_LSHIFT, VK_MEDIA_PLAY_PAUSE, VK_MENU, VK_RCONTROL, VK_RETURN,
+            VK_RMENU, VK_RSHIFT, VK_SHIFT, VK_SPACE,
         },
         WindowsAndMessaging::{
             CallNextHookEx, GetMessageW, PostThreadMessageW, SetWindowsHookExW, HHOOK,
@@ -663,7 +664,7 @@ fn install_suppressor_hook(app: &tauri::AppHandle) {
 unsafe extern "system" fn shortcut_suppressor_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let event = wparam.0 as u32;
-        let key = (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode;
+        let key = normalize_hook_key((*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode);
         let is_down = event == WM_KEYDOWN || event == WM_SYSKEYDOWN;
         let is_up = event == WM_KEYUP || event == WM_SYSKEYUP;
 
@@ -712,6 +713,16 @@ unsafe extern "system" fn shortcut_suppressor_proc(code: i32, wparam: WPARAM, lp
     }
 
     CallNextHookEx(None::<HHOOK>, code, wparam, lparam)
+}
+
+#[cfg(windows)]
+fn normalize_hook_key(key: u32) -> u32 {
+    match key {
+        k if k == VK_LMENU.0 as u32 || k == VK_RMENU.0 as u32 => VK_MENU.0 as u32,
+        k if k == VK_LCONTROL.0 as u32 || k == VK_RCONTROL.0 as u32 => VK_CONTROL.0 as u32,
+        k if k == VK_LSHIFT.0 as u32 || k == VK_RSHIFT.0 as u32 => VK_SHIFT.0 as u32,
+        _ => key,
+    }
 }
 
 #[cfg(windows)]
