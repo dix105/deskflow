@@ -914,7 +914,7 @@ async function installShortcut(next: string) {
 
     await unregisterRecordingToggleShortcuts(next);
     try {
-      await invoke('install_push_to_talk_hook', { shortcut: next });
+      await invoke('install_push_to_talk_hook', { shortcut: next, holdMode: recordingMode === 'hold' });
       shortcut = next;
       localStorage.setItem('shortcut', next);
       renderShortcut(next);

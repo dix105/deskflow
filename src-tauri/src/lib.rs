@@ -71,6 +71,7 @@ struct PushToTalkHookState {
     keys_down: HashSet<u32>,
     active: bool,
     suppressing: bool,
+    hold_mode: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -522,23 +523,26 @@ async fn rewrite_text(api_key: String, text: String, mode: String) -> Result<Str
 
 
 #[tauri::command]
-fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String, hold_mode: Option<bool>) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         let _ = app;
         let _ = shortcut;
+        let _ = hold_mode;
         Err("Native push-to-talk hook is only available on Windows".into())
     }
 
     #[cfg(windows)]
     {
         let shortcut_keys = parse_shortcut_keys(&shortcut)?;
+        let hold_mode = hold_mode.unwrap_or(false);
         let state = HOOK_STATE.get_or_init(|| Mutex::new(PushToTalkHookState {
             app: app.clone(),
             shortcut_keys: Vec::new(),
             keys_down: HashSet::new(),
             active: false,
             suppressing: false,
+            hold_mode,
         }));
 
         {
@@ -548,6 +552,7 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
             guard.keys_down.clear();
             guard.active = false;
             guard.suppressing = false;
+            guard.hold_mode = hold_mode;
         }
 
         if !HOOK_STARTED.swap(true, Ordering::SeqCst) {
@@ -556,15 +561,18 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
                 HOTKEY_THREAD_ID.store(GetCurrentThreadId(), Ordering::SeqCst);
                 let _ = app_for_thread.emit("push-to-talk-debug", "hotkey-thread-started".to_string());
                 install_suppressor_hook(&app_for_thread);
-                register_current_hotkey(&app_for_thread);
+                update_hotkey_registration(&app_for_thread);
 
                 let mut message = MSG::default();
                 while GetMessageW(&mut message, None, 0, 0).as_bool() {
                     if message.message == WM_FLOWDESK_UPDATE_HOTKEY {
-                        register_current_hotkey(&app_for_thread);
+                        update_hotkey_registration(&app_for_thread);
                     } else if message.message == WM_HOTKEY && message.wParam.0 as i32 == HOTKEY_ID {
                         if let Some(state) = HOOK_STATE.get() {
                             if let Ok(mut guard) = state.lock() {
+                                if guard.hold_mode {
+                                    continue;
+                                }
                                 if guard.active {
                                     continue;
                                 }
@@ -576,24 +584,13 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
                         let _ = app_for_thread.emit("push-to-talk-debug", "wm_hotkey_down".to_string());
                         let _ = app_for_thread.emit("push-to-talk-down", ());
 
-                        let app_release = app_for_thread.clone();
-                        thread::spawn(move || {
-                            loop {
-                                thread::sleep(Duration::from_millis(35));
-                                let still_pressed = is_push_to_talk_pressed();
-                                if !still_pressed {
-                                    if let Some(state) = HOOK_STATE.get() {
-                                        if let Ok(mut guard) = state.lock() {
-                                            guard.active = false;
-                                            guard.suppressing = false;
-                                        }
-                                    }
-                                    let _ = app_release.emit("push-to-talk-debug", "wm_hotkey_up".to_string());
-                                    let _ = app_release.emit("push-to-talk-up", ());
-                                    break;
-                                }
+                        // Toggle mode deliberately ignores physical key-up.
+                        if let Some(state) = HOOK_STATE.get() {
+                            if let Ok(mut guard) = state.lock() {
+                                guard.active = false;
+                                guard.suppressing = false;
                             }
-                        });
+                        }
                     }
                 }
             });
@@ -621,20 +618,70 @@ unsafe extern "system" fn shortcut_suppressor_proc(code: i32, wparam: WPARAM, lp
     if code >= 0 {
         let event = wparam.0 as u32;
         let key = (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode;
-        let is_key_event = event == WM_KEYDOWN || event == WM_SYSKEYDOWN || event == WM_KEYUP || event == WM_SYSKEYUP;
+        let is_down = event == WM_KEYDOWN || event == WM_SYSKEYDOWN;
+        let is_up = event == WM_KEYUP || event == WM_SYSKEYUP;
 
-        if is_key_event {
+        if is_down || is_up {
             if let Some(state) = HOOK_STATE.get() {
-                if let Ok(guard) = state.lock() {
-                    if guard.suppressing && guard.shortcut_keys.contains(&key) {
-                        return LRESULT(1);
+                let mut emit_down: Option<tauri::AppHandle> = None;
+                let mut emit_up: Option<tauri::AppHandle> = None;
+                let mut suppress = false;
+
+                if let Ok(mut guard) = state.lock() {
+                    let is_shortcut_key = guard.shortcut_keys.contains(&key);
+
+                    if is_down {
+                        guard.keys_down.insert(key);
+                        if guard.hold_mode && !guard.active && guard.shortcut_keys.iter().all(|shortcut_key| guard.keys_down.contains(shortcut_key)) {
+                            guard.active = true;
+                            guard.suppressing = true;
+                            emit_down = Some(guard.app.clone());
+                        }
+                    } else if is_up {
+                        guard.keys_down.remove(&key);
+                        if guard.hold_mode && guard.active && is_shortcut_key {
+                            guard.active = false;
+                            guard.suppressing = false;
+                            emit_up = Some(guard.app.clone());
+                        }
                     }
+
+                    suppress = guard.suppressing && is_shortcut_key;
+                }
+
+                if let Some(app) = emit_down {
+                    let _ = app.emit("push-to-talk-debug", "ll_hook_down".to_string());
+                    let _ = app.emit("push-to-talk-down", ());
+                }
+                if let Some(app) = emit_up {
+                    let _ = app.emit("push-to-talk-debug", "ll_hook_up".to_string());
+                    let _ = app.emit("push-to-talk-up", ());
+                }
+
+                if suppress {
+                    return LRESULT(1);
                 }
             }
         }
     }
 
     CallNextHookEx(None::<HHOOK>, code, wparam, lparam)
+}
+
+#[cfg(windows)]
+fn update_hotkey_registration(app: &tauri::AppHandle) {
+    let hold_mode = HOOK_STATE
+        .get()
+        .and_then(|state| state.lock().ok())
+        .map(|guard| guard.hold_mode)
+        .unwrap_or(false);
+
+    if hold_mode {
+        unsafe { let _ = UnregisterHotKey(None, HOTKEY_ID); }
+        let _ = app.emit("push-to-talk-debug", "hotkey-unregistered-for-hold-mode".to_string());
+    } else {
+        register_current_hotkey(app);
+    }
 }
 
 #[cfg(windows)]
