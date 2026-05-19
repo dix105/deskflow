@@ -919,12 +919,22 @@ async function setupPushToTalkListeners() {
   if (!isTauriRuntime || pushToTalkListenersReady) return;
   pushToTalkListenersReady = true;
 
-  await listen('push-to-talk-down', () => startRecordingFromPushToTalk());
-  await listen('push-to-talk-up', () => stopRecordingFromPushToTalk());
+  await listen('push-to-talk-debug', (event) => addDebugEvent('push_to_talk_native_debug', event.payload));
+  await listen('push-to-talk-down', () => {
+    addDebugEvent('push_to_talk_down_event');
+    startRecordingFromPushToTalk();
+  });
+  await listen('push-to-talk-up', () => {
+    addDebugEvent('push_to_talk_up_event');
+    stopRecordingFromPushToTalk();
+  });
 }
 
 function startRecordingFromPushToTalk() {
-  if (recorder?.state === 'recording' || recordingTransitionInFlight || recordingFinishing) return;
+  if (recorder?.state === 'recording' || recordingTransitionInFlight || recordingFinishing) {
+    addDebugEvent('push_to_talk_down_ignored', { recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
+    return;
+  }
   stopAfterStartRequested = false;
   miniWidget.classList.add('shortcut-active');
   miniWidgetLabel.textContent = 'Shortcut active';
@@ -935,6 +945,7 @@ function startRecordingFromPushToTalk() {
 async function stopRecordingFromPushToTalk() {
   await sleep(PUSH_TO_TALK_RELEASE_CONFIRM_MS);
   const stillPressed = await invoke<boolean>('is_push_to_talk_pressed');
+  addDebugEvent('push_to_talk_release_check', { stillPressed, recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
   if (stillPressed) return;
 
   miniWidget.classList.remove('shortcut-active');

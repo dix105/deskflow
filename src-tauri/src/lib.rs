@@ -440,6 +440,7 @@ unsafe extern "system" fn push_to_talk_keyboard_proc(code: i32, wparam: WPARAM, 
                         consume_event = guard.active || shortcut_down;
                         if !guard.active && shortcut_down {
                             guard.active = true;
+                            let _ = guard.app.emit("push-to-talk-debug", format!("down active=true key={key} consumed={consume_event}"));
                             let _ = guard.app.emit("push-to-talk-down", ());
                         }
                     } else {
@@ -447,6 +448,7 @@ unsafe extern "system" fn push_to_talk_keyboard_proc(code: i32, wparam: WPARAM, 
                         guard.keys_down.remove(&key);
                         if guard.active && guard.shortcut_keys.contains(&key) {
                             guard.active = false;
+                            let _ = guard.app.emit("push-to-talk-debug", format!("up active=false key={key} consumed={consume_event}"));
                             let _ = guard.app.emit("push-to-talk-up", ());
                         }
                     }
