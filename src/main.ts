@@ -57,6 +57,7 @@ let streamingSocket: WebSocket | null = null;
 let streamingTranscript = '';
 let streamingFinalParts: string[] = [];
 let streamingLastPastedLength = 0;
+let pendingStreamingChunks: Blob[] = [];
 let pushToTalkListenersReady = false;
 let waveformContext: AudioContext | null = null;
 let waveformAnalyser: AnalyserNode | null = null;
@@ -922,14 +923,16 @@ function openStreamingSocket() {
   streamingTranscript = '';
   streamingFinalParts = [];
   streamingLastPastedLength = 0;
+  pendingStreamingChunks = [];
 
-  const url = `wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=en&interim_results=true&punctuate=true&encoding=opus&sample_rate=48000&token=${encodeURIComponent(key)}`;
+  const url = `wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=en&interim_results=true&punctuate=true&token=${encodeURIComponent(key)}`;
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
 
   ws.addEventListener('open', () => {
     console.log('[Deepgram WS] connected');
     setStatus('recording', 'Streaming — words will appear as you speak…');
+    flushPendingStreamingChunks();
   });
 
   ws.addEventListener('message', (event) => {
@@ -964,11 +967,27 @@ function openStreamingSocket() {
 }
 
 function sendAudioChunkToStream(data: Blob) {
-  if (streamingSocket && streamingSocket.readyState === WebSocket.OPEN) {
-    data.arrayBuffer().then((buf) => {
-      streamingSocket!.send(buf);
-    });
+  if (!streamingSocket || streamingSocket.readyState === WebSocket.CONNECTING) {
+    pendingStreamingChunks.push(data);
+    return;
   }
+
+  if (streamingSocket.readyState === WebSocket.OPEN) {
+    sendBlobToStreamingSocket(data);
+  }
+}
+
+function flushPendingStreamingChunks() {
+  const queued = pendingStreamingChunks;
+  pendingStreamingChunks = [];
+  queued.forEach(sendBlobToStreamingSocket);
+}
+
+function sendBlobToStreamingSocket(data: Blob) {
+  if (!streamingSocket || streamingSocket.readyState !== WebSocket.OPEN) return;
+  data.arrayBuffer().then((buf) => {
+    if (streamingSocket?.readyState === WebSocket.OPEN) streamingSocket.send(buf);
+  });
 }
 
 async function closeStreamingSocket(): Promise<string> {
@@ -985,12 +1004,14 @@ async function closeStreamingSocket(): Promise<string> {
     const timeout = setTimeout(() => {
       streamingSocket?.close();
       streamingSocket = null;
+      pendingStreamingChunks = [];
       resolve(streamingTranscript.trim());
     }, 1500);
 
     streamingSocket.addEventListener('close', () => {
       clearTimeout(timeout);
       streamingSocket = null;
+      pendingStreamingChunks = [];
       resolve(streamingTranscript.trim());
     }, { once: true });
   });
@@ -1007,7 +1028,9 @@ async function transcribeStreamingResult() {
       rewriteInput.value = text;
       setStatus('success', `Streamed and pasted: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
     } else {
-      setStatus('error', 'No speech detected during streaming.');
+      setStatus('working', 'Live stream returned no text — retrying with normal transcription…');
+      await transcribeAndPaste();
+      return;
     }
   } catch (error) {
     setStatus('error', String(error));
