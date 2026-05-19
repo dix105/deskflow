@@ -931,7 +931,7 @@ function openStreamingSocket() {
   streamingSocketOpened = false;
   streamingSocketFailed = false;
 
-  const url = 'wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=en-US&interim_results=true&punctuate=true&encoding=opus&sample_rate=48000&endpointing=300&utterance_end_ms=1000';
+  const url = 'wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=en-US&interim_results=true&punctuate=true&endpointing=300&utterance_end_ms=1000';
   const ws = new WebSocket(url, ['token', key]);
   ws.binaryType = 'arraybuffer';
 
