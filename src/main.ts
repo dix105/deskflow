@@ -589,7 +589,7 @@ function setStatus(kind: StatusKind, message: string) {
 
 function addDebugEvent(label: string, data?: unknown) {
   debugEvents.push({ time: new Date().toISOString(), label, data });
-  debugEvents = debugEvents.slice(-120);
+  debugEvents = debugEvents.slice(-300);
   renderDebugLog();
 }
 
@@ -619,11 +619,16 @@ function buildDebugBundle() {
     supportedMimeTypes: ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].filter((type) => MediaRecorder.isTypeSupported(type)),
     selectedMimeType: pickMimeType(),
     shortcut: formatShortcutLabel(shortcut),
+    currentStatus: statusBox.textContent,
+    recorderState: recorder?.state || null,
+    streamingSocketState: streamingSocket?.readyState ?? null,
+    chunksBuffered: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)),
     events: debugEvents,
   }, null, 2);
 }
 
 function startWaveformMonitor(stream: MediaStream) {
+  addDebugEvent('waveform_monitor_start');
   stopWaveformMonitor();
 
   const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -660,6 +665,7 @@ function startWaveformMonitor(stream: MediaStream) {
 }
 
 function stopWaveformMonitor() {
+  if (waveformFrame || waveformContext || waveformAnalyser) addDebugEvent('waveform_monitor_stop');
   if (waveformFrame) window.cancelAnimationFrame(waveformFrame);
   waveformFrame = 0;
   waveformAnalyser = null;
@@ -891,10 +897,15 @@ async function testAudioDucking() {
 }
 
 async function toggleRecording() {
+  addDebugEvent('toggle_recording_called', { recorderState: recorder?.state || null, transition: recordingTransitionInFlight, provider: transcriptionProvider, streamingEnabled: deepgramStreamingEnabled });
   const now = Date.now();
-  if (recordingTransitionInFlight || now - lastRecordingToggleAt < RECORDING_TOGGLE_DEBOUNCE_MS) return;
+  if (recordingTransitionInFlight || now - lastRecordingToggleAt < RECORDING_TOGGLE_DEBOUNCE_MS) {
+    addDebugEvent('toggle_recording_ignored', { transition: recordingTransitionInFlight, msSinceLastToggle: now - lastRecordingToggleAt });
+    return;
+  }
   lastRecordingToggleAt = now;
   if (recorder && recorder.state === 'recording') {
+    addDebugEvent('recorder_stop_requested', { reason: 'toggle', state: recorder.state });
     recorder.stop();
     return;
   }
@@ -910,6 +921,7 @@ async function toggleRecording() {
     syncSarvamKey();
     syncDeepgramKey();
     if (!activeTranscriptionKey()) {
+      addDebugEvent('missing_provider_key', { provider: transcriptionProvider });
       setStatus('error', `Add your ${providerLabel()} API key first.`);
       return;
     }
@@ -924,6 +936,7 @@ async function toggleRecording() {
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    addDebugEvent('mic_stream_acquired', { trackCount: stream.getAudioTracks().length });
     startWaveformMonitor(stream);
     chunks = [];
     const mimeType = pickMimeType();
@@ -932,6 +945,7 @@ async function toggleRecording() {
     recorder = new MediaRecorder(stream, { mimeType });
 
     recorder.addEventListener('dataavailable', (event) => {
+      addDebugEvent('media_recorder_dataavailable', { size: event.data.size, type: event.data.type, streaming });
       if (event.data.size > 0) {
         chunks.push(event.data);
         if (streaming) sendAudioChunkToStream(event.data);
@@ -939,7 +953,9 @@ async function toggleRecording() {
     });
 
     recorder.addEventListener('stop', async () => {
+      addDebugEvent('media_recorder_stop_event', { chunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)), streaming });
       stream.getTracks().forEach((track) => track.stop());
+      addDebugEvent('mic_tracks_stopped');
       if (streaming) {
         await transcribeStreamingResult();
       } else {
@@ -1147,8 +1163,10 @@ async function closeStreamingSocket(): Promise<string> {
 async function transcribeStreamingResult() {
   try {
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
+    addDebugEvent('streaming_transcription_finish_start', { durationMs, bufferedChunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)) });
     setStatus('working', 'Finishing stream…');
     const text = await closeStreamingSocket();
+    addDebugEvent('streaming_transcription_finish_result', { text, length: text.length, socketFailed: streamingSocketFailed });
 
     if (text) {
       const stats = addHistory(text, durationMs);
@@ -1161,6 +1179,7 @@ async function transcribeStreamingResult() {
       return;
     }
   } catch (error) {
+    addDebugEvent('streaming_transcription_error', String(error));
     setStatus('error', String(error));
   } finally {
     recorder = null;
@@ -1180,6 +1199,7 @@ function pickMimeType() {
 
 async function transcribeAndPaste() {
   try {
+    addDebugEvent('normal_transcription_start', { provider: transcriptionProvider, chunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)) });
     setStatus('working', `Transcribing with ${providerLabel()} and pasting into the focused app…`);
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
     const blob = new Blob(chunks, { type: 'audio/webm' });
@@ -1191,11 +1211,13 @@ async function transcribeAndPaste() {
       audioBytes: bytes,
       vocabularyPrompt: buildVocabularyPrompt(),
     });
+    addDebugEvent('normal_transcription_result', { text, length: text.length });
 
     const stats = addHistory(text, durationMs);
     rewriteInput.value = text;
     setStatus('success', `Pasted and saved to history: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
   } catch (error) {
+    addDebugEvent('normal_transcription_error', String(error));
     setStatus('error', String(error));
   } finally {
     recorder = null;
