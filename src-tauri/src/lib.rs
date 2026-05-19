@@ -14,7 +14,7 @@ use tauri::Emitter;
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(windows)]
 use windows::Win32::{
-    Foundation::{LPARAM, WPARAM},
+    Foundation::{LPARAM, LRESULT, WPARAM},
     Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator},
     Media::Audio::Endpoints::IAudioEndpointVolume,
     System::{
@@ -28,7 +28,9 @@ use windows::Win32::{
             VK_MENU, VK_RETURN, VK_SHIFT, VK_SPACE,
         },
         WindowsAndMessaging::{
-            GetMessageW, PostThreadMessageW, MSG, WM_APP, WM_HOTKEY,
+            CallNextHookEx, GetMessageW, PostThreadMessageW, SetWindowsHookExW, HHOOK,
+            KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_APP, WM_HOTKEY, WM_KEYDOWN,
+            WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
@@ -53,6 +55,7 @@ struct PushToTalkHookState {
     shortcut_keys: Vec<u32>,
     keys_down: HashSet<u32>,
     active: bool,
+    suppressing: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -403,6 +406,7 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
             shortcut_keys: Vec::new(),
             keys_down: HashSet::new(),
             active: false,
+            suppressing: false,
         }));
 
         {
@@ -411,6 +415,7 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
             guard.shortcut_keys = shortcut_keys;
             guard.keys_down.clear();
             guard.active = false;
+            guard.suppressing = false;
         }
 
         if !HOOK_STARTED.swap(true, Ordering::SeqCst) {
@@ -418,6 +423,7 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
             thread::spawn(move || unsafe {
                 HOTKEY_THREAD_ID.store(GetCurrentThreadId(), Ordering::SeqCst);
                 let _ = app_for_thread.emit("push-to-talk-debug", "hotkey-thread-started".to_string());
+                install_suppressor_hook(&app_for_thread);
                 register_current_hotkey(&app_for_thread);
 
                 let mut message = MSG::default();
@@ -425,6 +431,16 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
                     if message.message == WM_FLOWDESK_UPDATE_HOTKEY {
                         register_current_hotkey(&app_for_thread);
                     } else if message.message == WM_HOTKEY && message.wParam.0 as i32 == HOTKEY_ID {
+                        if let Some(state) = HOOK_STATE.get() {
+                            if let Ok(mut guard) = state.lock() {
+                                if guard.active {
+                                    continue;
+                                }
+                                guard.active = true;
+                                guard.suppressing = true;
+                            }
+                        }
+
                         let _ = app_for_thread.emit("push-to-talk-debug", "wm_hotkey_down".to_string());
                         let _ = app_for_thread.emit("push-to-talk-down", ());
 
@@ -434,6 +450,12 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
                                 thread::sleep(Duration::from_millis(35));
                                 let still_pressed = is_push_to_talk_pressed();
                                 if !still_pressed {
+                                    if let Some(state) = HOOK_STATE.get() {
+                                        if let Ok(mut guard) = state.lock() {
+                                            guard.active = false;
+                                            guard.suppressing = false;
+                                        }
+                                    }
                                     let _ = app_release.emit("push-to-talk-debug", "wm_hotkey_up".to_string());
                                     let _ = app_release.emit("push-to-talk-up", ());
                                     break;
@@ -452,6 +474,35 @@ fn install_push_to_talk_hook(app: tauri::AppHandle, shortcut: String) -> Result<
 
         Ok(())
     }
+}
+
+#[cfg(windows)]
+fn install_suppressor_hook(app: &tauri::AppHandle) {
+    match unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(shortcut_suppressor_proc), None, 0) } {
+        Ok(_) => { let _ = app.emit("push-to-talk-debug", "suppressor-hook-installed".to_string()); }
+        Err(error) => { let _ = app.emit("push-to-talk-debug", format!("suppressor-hook-error: {error}")); }
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn shortcut_suppressor_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let event = wparam.0 as u32;
+        let key = (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode;
+        let is_key_event = event == WM_KEYDOWN || event == WM_SYSKEYDOWN || event == WM_KEYUP || event == WM_SYSKEYUP;
+
+        if is_key_event {
+            if let Some(state) = HOOK_STATE.get() {
+                if let Ok(guard) = state.lock() {
+                    if guard.suppressing && guard.shortcut_keys.contains(&key) {
+                        return LRESULT(1);
+                    }
+                }
+            }
+        }
+    }
+
+    CallNextHookEx(None::<HHOOK>, code, wparam, lparam)
 }
 
 #[cfg(windows)]
