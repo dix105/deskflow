@@ -802,9 +802,7 @@ async function installShortcut(next: string) {
       return;
     }
 
-    if (shortcut && await isRegistered(shortcut)) {
-      await unregister(shortcut);
-    }
+    await unregisterRecordingToggleShortcuts(next);
     try {
       await invoke('install_push_to_talk_hook', { shortcut: next });
       shortcut = next;
@@ -834,6 +832,27 @@ async function installShortcut(next: string) {
     setStatus('success', `Toggle shortcut registered: ${formatShortcutLabel(next)}`);
   } catch (error) {
     setStatus('error', `Could not register recording shortcut: ${String(error)}`);
+  }
+}
+
+async function unregisterRecordingToggleShortcuts(next: string) {
+  const staleShortcuts = new Set([
+    shortcut,
+    next,
+    DEFAULT_SHORTCUT,
+    'Alt+V',
+    'CommandOrControl+Alt+Space',
+  ].filter(Boolean));
+
+  for (const value of staleShortcuts) {
+    try {
+      if (await isRegistered(value)) {
+        await unregister(value);
+        addDebugEvent('stale_toggle_shortcut_unregistered', { shortcut: value });
+      }
+    } catch (error) {
+      addDebugEvent('stale_toggle_shortcut_unregister_failed', { shortcut: value, error: String(error) });
+    }
   }
 }
 
