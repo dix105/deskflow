@@ -23,7 +23,6 @@ const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
 const DEBUG_EXPECTED_WORDS_KEY = 'flowDeskDebugExpectedWords';
 const AUDIO_RESTORE_DELAY_MS = 150;
 const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
-const PUSH_TO_TALK_RELEASE_CONFIRM_MS = 140;
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -62,7 +61,6 @@ let audioDuckingEnabled = true;
 let pauseBackgroundMediaEnabled = localStorage.getItem(MEDIA_PAUSE_KEY) === 'true';
 let fastMicEnabled = localStorage.getItem(FAST_MIC_KEY) === 'true';
 let nativeMicEnabled = localStorage.getItem(NATIVE_MIC_KEY) !== 'false';
-let releasePollActive = false;
 let recordingMode = (localStorage.getItem(RECORDING_MODE_KEY) as RecordingMode) || 'hold';
 let audioDuckingVolume = Number(localStorage.getItem(AUDIO_DUCKING_VOLUME_KEY) || '35');
 if (!Number.isFinite(audioDuckingVolume)) audioDuckingVolume = 35;
@@ -1061,7 +1059,6 @@ function startRecordingFromPushToTalk() {
     }
   } else if (recorder?.state === 'recording' || recordingTransitionInFlight || recordingFinishing) {
     addDebugEvent('push_to_talk_down_ignored', { recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
-    beginShortcutReleasePoll('push_to_talk_down_ignored');
     return;
   }
 
@@ -1070,39 +1067,11 @@ function startRecordingFromPushToTalk() {
   miniWidgetLabel.textContent = 'Shortcut active';
   miniWidgetState.textContent = 'Opening mic';
   toggleRecording();
-  if (recordingMode === 'hold') beginShortcutReleasePoll('push_to_talk_down');
-}
-
-async function beginShortcutReleasePoll(source: string) {
-  if (!isTauriRuntime || releasePollActive || recordingMode !== 'hold') return;
-  releasePollActive = true;
-  addDebugEvent('shortcut_release_poll_start', { source });
-
-  try {
-    for (let attempt = 0; attempt < 1200; attempt += 1) {
-      await sleep(50);
-      const stillPressed = await invoke<boolean>('is_push_to_talk_pressed');
-      if (!stillPressed) {
-        addDebugEvent('shortcut_release_poll_released', { source, attempt });
-        await stopRecordingFromPushToTalk();
-        return;
-      }
-      if (attempt % 20 === 0) addDebugEvent('shortcut_release_poll_still_pressed', { source, attempt });
-    }
-    addDebugEvent('shortcut_release_poll_timeout', { source });
-  } catch (error) {
-    addDebugEvent('shortcut_release_poll_error', { source, error: String(error) });
-  } finally {
-    releasePollActive = false;
-  }
 }
 
 async function stopRecordingFromPushToTalk() {
   if (recordingMode !== 'hold') return;
-  await sleep(PUSH_TO_TALK_RELEASE_CONFIRM_MS);
-  const stillPressed = await invoke<boolean>('is_push_to_talk_pressed');
-  addDebugEvent('push_to_talk_release_check', { stillPressed, recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
-  if (stillPressed) return;
+  addDebugEvent('push_to_talk_release_check', { source: 'low_level_hook_up', recorderState: recorder?.state || null, nativeRecordingActive, transition: recordingTransitionInFlight, finishing: recordingFinishing });
 
   miniWidget.classList.remove('shortcut-active');
 
