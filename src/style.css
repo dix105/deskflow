@@ -203,6 +203,11 @@ kbd { display: inline-flex; min-width: 25px; justify-content: center; margin: 0 
 .rewrite-actions { display: flex; gap: 9px; flex-wrap: wrap; }
 .rewrite-actions button { border: 1px solid #e3dfd6; border-radius: 8px; background: #fff; padding: 9px 11px; font-weight: 750; }
 
+
+.debug-card { margin-top: 18px; border: 1px solid #e2ddd4; border-radius: 18px; padding: 18px; background: linear-gradient(180deg, #fff 0%, #fbfaf7 100%); box-shadow: 0 1px 2px rgba(25,24,22,.03); }
+.debug-card textarea { min-height: 78px; resize: vertical; font-family: inherit; }
+.debug-log { max-height: 260px; overflow: auto; margin: 12px 0 0; border: 1px solid #e3dfd6; border-radius: 12px; padding: 12px; background: #191816; color: #f8f4ec; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+
 .settings-drawer { position: fixed; inset: 0; z-index: 20; pointer-events: none; opacity: 0; transition: 160ms ease; }
 .settings-drawer.open { pointer-events: auto; opacity: 1; }
 .drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.22); }

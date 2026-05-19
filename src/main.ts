@@ -16,6 +16,7 @@ const DEEPGRAM_STREAMING_KEY = 'deepgramStreaming';
 const TOTAL_WORDS_KEY = 'flowDeskTotalWordsSpoken';
 const MEDIA_PAUSE_KEY = 'flowDeskPauseBackgroundMedia';
 const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
+const DEBUG_EXPECTED_WORDS_KEY = 'flowDeskDebugExpectedWords';
 const AUDIO_RESTORE_DELAY_MS = 150;
 const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
 const PUSH_TO_TALK_RELEASE_CONFIRM_MS = 140;
@@ -61,6 +62,7 @@ let pendingStreamingChunks: Blob[] = [];
 let streamingSendPromises: Promise<void>[] = [];
 let streamingSocketOpened = false;
 let streamingSocketFailed = false;
+let debugEvents: { time: string; label: string; data?: unknown }[] = [];
 let pushToTalkListenersReady = false;
 let waveformContext: AudioContext | null = null;
 let waveformAnalyser: AnalyserNode | null = null;
@@ -165,6 +167,15 @@ app.innerHTML = `
               </div>
             </article>
           </section>
+
+          <article class="debug-card">
+            <div class="provider-card-head">
+              <div><strong>Debug bundle</strong><span>Add what you spoke, then copy all stream logs for fast diagnosis.</span></div>
+              <button id="copyDebugBundle" class="soft-btn" type="button">Copy bundle</button>
+            </div>
+            <label class="field"><span>Words you spoke / expected text</span><textarea id="debugExpectedWords" rows="3" placeholder="Example: hello this is a streaming test..."></textarea></label>
+            <pre id="debugLogOutput" class="debug-log">No stream logs yet.</pre>
+          </article>
         </section>
 
         <section class="view-panel" data-panel="snippets">
@@ -253,6 +264,9 @@ const openRewriteButton = document.querySelector<HTMLButtonElement>('#openRewrit
 const copyRewriteButton = document.querySelector<HTMLButtonElement>('#copyRewrite')!;
 const pasteRewriteButton = document.querySelector<HTMLButtonElement>('#pasteRewrite')!;
 const startFromScratchpadButton = document.querySelector<HTMLButtonElement>('#startFromScratchpad')!;
+const debugExpectedWordsInput = document.querySelector<HTMLTextAreaElement>('#debugExpectedWords')!;
+const debugLogOutput = document.querySelector<HTMLElement>('#debugLogOutput')!;
+const copyDebugBundleButton = document.querySelector<HTMLButtonElement>('#copyDebugBundle')!;
 
 apiKeyInput.value = localStorage.getItem('groqApiKey') || '';
 drawerApiKeyInput.value = apiKeyInput.value;
@@ -260,6 +274,7 @@ elevenLabsApiKeyInput.value = localStorage.getItem(ELEVENLABS_KEY) || '';
 sarvamApiKeyInput.value = localStorage.getItem(SARVAM_KEY) || '';
 deepgramApiKeyInput.value = localStorage.getItem(DEEPGRAM_KEY) || '';
 deepgramStreamingInput.checked = deepgramStreamingEnabled;
+debugExpectedWordsInput.value = localStorage.getItem(DEBUG_EXPECTED_WORDS_KEY) || '';
 renderProvider();
 if (vocabularyInput) vocabularyInput.value = localStorage.getItem(VOCABULARY_KEY) || '';
 renderShortcut(shortcut);
@@ -296,6 +311,11 @@ deepgramApiKeyInput.addEventListener('change', syncDeepgramKey);
 deepgramStreamingInput.addEventListener('change', () => {
   deepgramStreamingEnabled = deepgramStreamingInput.checked;
   localStorage.setItem(DEEPGRAM_STREAMING_KEY, String(deepgramStreamingEnabled));
+});
+debugExpectedWordsInput.addEventListener('input', () => localStorage.setItem(DEBUG_EXPECTED_WORDS_KEY, debugExpectedWordsInput.value.trim()));
+copyDebugBundleButton.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(buildDebugBundle());
+  setStatus('success', 'Debug bundle copied. Paste it here.');
 });
 vocabularyInput?.addEventListener('input', () => {
   localStorage.setItem(VOCABULARY_KEY, vocabularyInput.value.trim());
@@ -549,6 +569,7 @@ function closeSettings() {
 }
 
 function setStatus(kind: StatusKind, message: string) {
+  addDebugEvent('status', { kind, message });
   statusBox.className = `status ${kind}`;
   statusBox.textContent = message;
   recordOrb.className = `record-orb ${kind}`;
@@ -564,6 +585,42 @@ function setStatus(kind: StatusKind, message: string) {
   toggleButton.innerHTML = kind === 'recording'
     ? '<span class="button-dot"></span>Stop and paste'
     : '<span class="button-dot"></span>Start recording';
+}
+
+function addDebugEvent(label: string, data?: unknown) {
+  debugEvents.push({ time: new Date().toISOString(), label, data });
+  debugEvents = debugEvents.slice(-120);
+  renderDebugLog();
+}
+
+function safeDebugData(data: unknown) {
+  if (data instanceof Blob) return { size: data.size, type: data.type };
+  if (data instanceof Event) return { type: data.type };
+  return data;
+}
+
+function renderDebugLog() {
+  if (!debugLogOutput) return;
+  debugLogOutput.textContent = debugEvents.length
+    ? debugEvents.map((event) => `[${event.time}] ${event.label}${event.data === undefined ? '' : ` ${JSON.stringify(safeDebugData(event.data))}`}`).join('\n')
+    : 'No stream logs yet.';
+}
+
+function buildDebugBundle() {
+  const safeKey = activeTranscriptionKey() ? `${activeTranscriptionKey().slice(0, 4)}…${activeTranscriptionKey().slice(-4)}` : 'missing';
+  return JSON.stringify({
+    createdAt: new Date().toISOString(),
+    expectedWords: debugExpectedWordsInput.value.trim(),
+    provider: transcriptionProvider,
+    deepgramStreamingEnabled,
+    keyPreview: safeKey,
+    userAgent: navigator.userAgent,
+    mediaRecorderSupported: typeof MediaRecorder !== 'undefined',
+    supportedMimeTypes: ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].filter((type) => MediaRecorder.isTypeSupported(type)),
+    selectedMimeType: pickMimeType(),
+    shortcut: formatShortcutLabel(shortcut),
+    events: debugEvents,
+  }, null, 2);
 }
 
 function startWaveformMonitor(stream: MediaStream) {
@@ -869,9 +926,10 @@ async function toggleRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     startWaveformMonitor(stream);
     chunks = [];
-    recorder = new MediaRecorder(stream, { mimeType: pickMimeType() });
-
+    const mimeType = pickMimeType();
     const streaming = isStreamingActive();
+    addDebugEvent('media_recorder_starting', { mimeType, streaming, tracks: stream.getAudioTracks().map((track) => ({ label: track.label, enabled: track.enabled, muted: track.muted, readyState: track.readyState, settings: track.getSettings() })) });
+    recorder = new MediaRecorder(stream, { mimeType });
 
     recorder.addEventListener('dataavailable', (event) => {
       if (event.data.size > 0) {
@@ -898,6 +956,7 @@ async function toggleRecording() {
     } else {
       recorder.start();
     }
+    addDebugEvent('media_recorder_started', { state: recorder.state, streaming, mimeType: recorder.mimeType });
     setStatus('recording', 'Recording… release shortcut or click stop when done.');
     if (stopAfterStartRequested) {
       stopAfterStartRequested = false;
@@ -909,6 +968,7 @@ async function toggleRecording() {
       await invoke('resume_background_media');
     }
     setStatus('error', `Mic error: ${String(error)}`);
+    addDebugEvent('mic_error', String(error));
   } finally {
     recordingTransitionInFlight = false;
     if (recorder?.state !== 'recording') miniWidget.classList.remove('shortcut-active');
@@ -932,12 +992,14 @@ function openStreamingSocket() {
   streamingSocketFailed = false;
 
   const url = 'wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&language=en-US&interim_results=true&punctuate=true&endpointing=300&utterance_end_ms=1000';
+  addDebugEvent('deepgram_socket_opening', { url, auth: 'subprotocol token', expectedWords: debugExpectedWordsInput.value.trim() });
   const ws = new WebSocket(url, ['token', key]);
   ws.binaryType = 'arraybuffer';
 
   ws.addEventListener('open', () => {
     streamingSocketOpened = true;
     console.log('[Deepgram WS] connected');
+    addDebugEvent('deepgram_socket_open');
     setStatus('recording', 'Streaming — words will appear as you speak…');
     flushPendingStreamingChunks();
   });
@@ -945,6 +1007,15 @@ function openStreamingSocket() {
   ws.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data);
+      addDebugEvent('deepgram_message', {
+        type: msg.type,
+        duration: msg.duration,
+        start: msg.start,
+        is_final: msg.is_final,
+        speech_final: msg.speech_final,
+        transcript: msg.channel?.alternatives?.[0]?.transcript || '',
+        confidence: msg.channel?.alternatives?.[0]?.confidence,
+      });
       if (msg.type === 'Results' && msg.channel?.alternatives?.length) {
         const alt = msg.channel.alternatives[0];
         const text = alt.transcript || '';
@@ -955,6 +1026,7 @@ function openStreamingSocket() {
           const delta = liveTranscript.substring(streamingLastPastedLength);
           if (delta && isTauriRuntime) {
             invoke('paste_transcript', { text: (streamingLastPastedLength > 0 ? ' ' : '') + delta }).catch(() => {});
+            addDebugEvent('live_paste_delta', { delta, length: delta.length });
           }
           streamingLastPastedLength = Math.max(streamingLastPastedLength, liveTranscript.length);
           streamingTranscript = liveTranscript;
@@ -971,17 +1043,20 @@ function openStreamingSocket() {
   ws.addEventListener('error', (e) => {
     streamingSocketFailed = true;
     console.error('[Deepgram WS] error', e);
+    addDebugEvent('deepgram_socket_error', e);
   });
 
   ws.addEventListener('close', (event) => {
     if (!streamingSocketOpened) streamingSocketFailed = true;
     console.log('[Deepgram WS] closed', { code: event.code, reason: event.reason, wasClean: event.wasClean });
+    addDebugEvent('deepgram_socket_close', { code: event.code, reason: event.reason, wasClean: event.wasClean });
   });
 
   streamingSocket = ws;
 }
 
 function sendAudioChunkToStream(data: Blob) {
+  addDebugEvent('audio_chunk', { size: data.size, type: data.type, socketState: streamingSocket?.readyState ?? 'none' });
   if (!streamingSocket || streamingSocket.readyState === WebSocket.CONNECTING) {
     pendingStreamingChunks.push(data);
     return;
@@ -1001,7 +1076,10 @@ function flushPendingStreamingChunks() {
 function sendBlobToStreamingSocket(data: Blob) {
   if (!streamingSocket || streamingSocket.readyState !== WebSocket.OPEN) return;
   const sendPromise = data.arrayBuffer().then((buf) => {
-    if (streamingSocket?.readyState === WebSocket.OPEN) streamingSocket.send(buf);
+    if (streamingSocket?.readyState === WebSocket.OPEN) {
+      streamingSocket.send(buf);
+      addDebugEvent('audio_chunk_sent', { bytes: buf.byteLength, type: data.type });
+    }
   }).catch((error) => {
     streamingSocketFailed = true;
     console.error('[Deepgram WS] audio chunk send failed', error);
@@ -1034,6 +1112,7 @@ async function closeStreamingSocket(): Promise<string> {
 
       // Send close message only after every recorded audio blob has actually left the browser.
       if (streamingSocket?.readyState === WebSocket.OPEN) {
+        addDebugEvent('close_stream_sent');
         streamingSocket.send(JSON.stringify({ type: 'CloseStream' }));
       }
 
