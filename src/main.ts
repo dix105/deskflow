@@ -39,13 +39,10 @@ type HistoryItem = {
 let recorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];
 let shortcut = localStorage.getItem('shortcut') || DEFAULT_SHORTCUT;
-if (isUnsafeRecordingShortcut(shortcut)) {
-  shortcut = DEFAULT_SHORTCUT;
-  localStorage.setItem('shortcut', shortcut);
-}
 let polishShortcut = localStorage.getItem(POLISH_SHORTCUT_KEY) || DEFAULT_POLISH_SHORTCUT;
 let captureTarget: 'dictation' | 'polish' | null = null;
 let pressedShortcutModifiers = new Set<string>();
+let holdToTalkEnabled = false;
 let transcriptionProvider = (localStorage.getItem(PROVIDER_KEY) as TranscriptionProvider) || 'groq';
 let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
@@ -797,14 +794,6 @@ function normalizeKey(key: string) {
 
 async function installShortcut(next: string) {
   try {
-    if (isUnsafeRecordingShortcut(next)) {
-      shortcut = DEFAULT_SHORTCUT;
-      localStorage.setItem('shortcut', shortcut);
-      renderShortcut(shortcut);
-      setStatus('error', `Recording shortcut cannot end with a letter like ${formatShortcutLabel(next)} because holding it can type into apps. Use ${formatShortcutLabel(DEFAULT_SHORTCUT)} or another non-text key.`);
-      return;
-    }
-
     if (!isTauriRuntime) {
       shortcut = next;
       localStorage.setItem('shortcut', next);
@@ -821,6 +810,7 @@ async function installShortcut(next: string) {
       shortcut = next;
       localStorage.setItem('shortcut', next);
       renderShortcut(next);
+      holdToTalkEnabled = true;
       setStatus('success', `Hold-to-talk shortcut registered: ${formatShortcutLabel(next)}. Release stops recording.`);
       addDebugEvent('push_to_talk_hook_registered', { shortcut: next });
       return;
@@ -828,10 +818,19 @@ async function installShortcut(next: string) {
       addDebugEvent('push_to_talk_hook_failed_falling_back', String(error));
     }
 
+    if (isUnsafeRecordingShortcut(next)) {
+      shortcut = DEFAULT_SHORTCUT;
+      localStorage.setItem('shortcut', shortcut);
+      renderShortcut(shortcut);
+      setStatus('error', `Native hold-to-talk failed, so ${formatShortcutLabel(next)} was rejected because fallback toggle mode can type letters into apps. Use ${formatShortcutLabel(DEFAULT_SHORTCUT)} or fix native hook.`);
+      return;
+    }
+
     await register(next, () => toggleRecording());
     shortcut = next;
     localStorage.setItem('shortcut', next);
     renderShortcut(next);
+    holdToTalkEnabled = false;
     setStatus('success', `Toggle shortcut registered: ${formatShortcutLabel(next)}`);
   } catch (error) {
     setStatus('error', `Could not register recording shortcut: ${String(error)}`);
@@ -1015,7 +1014,7 @@ async function toggleRecording() {
       recorder.start();
     }
     addDebugEvent('media_recorder_started', { state: recorder.state, streaming, mimeType: recorder.mimeType });
-    setStatus('recording', 'Recording… press shortcut again or click widget to stop.');
+    setStatus('recording', holdToTalkEnabled ? 'Recording… release shortcut to stop.' : 'Recording… press shortcut again or click widget to stop.');
     if (stopAfterStartRequested) {
       stopAfterStartRequested = false;
       requestStopRecording('stop_after_start_requested');

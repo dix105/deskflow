@@ -434,18 +434,16 @@ unsafe extern "system" fn push_to_talk_keyboard_proc(code: i32, wparam: WPARAM, 
         if is_down || is_up {
             if let Some(state) = HOOK_STATE.get() {
                 if let Ok(mut guard) = state.lock() {
-                    let shortcut_key = guard.shortcut_keys.contains(&key);
-                    if shortcut_key || guard.active {
-                        consume_event = true;
-                    }
-
                     if is_down {
                         guard.keys_down.insert(key);
-                        if !guard.active && guard.shortcut_keys.iter().all(|part| guard.keys_down.contains(part)) {
+                        let shortcut_down = guard.shortcut_keys.iter().all(|part| guard.keys_down.contains(part));
+                        consume_event = guard.active || shortcut_down;
+                        if !guard.active && shortcut_down {
                             guard.active = true;
                             let _ = guard.app.emit("push-to-talk-down", ());
                         }
                     } else {
+                        consume_event = guard.active && guard.shortcut_keys.contains(&key);
                         guard.keys_down.remove(&key);
                         if guard.active && guard.shortcut_keys.contains(&key) {
                             guard.active = false;
