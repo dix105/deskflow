@@ -58,6 +58,7 @@ let streamingTranscript = '';
 let streamingFinalParts: string[] = [];
 let streamingLastPastedLength = 0;
 let pendingStreamingChunks: Blob[] = [];
+let streamingSendPromises: Promise<void>[] = [];
 let streamingSocketOpened = false;
 let streamingSocketFailed = false;
 let pushToTalkListenersReady = false;
@@ -926,6 +927,7 @@ function openStreamingSocket() {
   streamingFinalParts = [];
   streamingLastPastedLength = 0;
   pendingStreamingChunks = [];
+  streamingSendPromises = [];
   streamingSocketOpened = false;
   streamingSocketFailed = false;
 
@@ -992,9 +994,19 @@ function flushPendingStreamingChunks() {
 
 function sendBlobToStreamingSocket(data: Blob) {
   if (!streamingSocket || streamingSocket.readyState !== WebSocket.OPEN) return;
-  data.arrayBuffer().then((buf) => {
+  const sendPromise = data.arrayBuffer().then((buf) => {
     if (streamingSocket?.readyState === WebSocket.OPEN) streamingSocket.send(buf);
+  }).catch((error) => {
+    streamingSocketFailed = true;
+    console.error('[Deepgram WS] audio chunk send failed', error);
   });
+  streamingSendPromises.push(sendPromise);
+}
+
+async function waitForStreamingAudioSends() {
+  const sends = streamingSendPromises;
+  streamingSendPromises = [];
+  if (sends.length) await Promise.allSettled(sends);
 }
 
 async function closeStreamingSocket(): Promise<string> {
@@ -1006,27 +1018,44 @@ async function closeStreamingSocket(): Promise<string> {
     if (streamingSocket.readyState === WebSocket.CLOSED || streamingSocket.readyState === WebSocket.CLOSING) {
       streamingSocket = null;
       pendingStreamingChunks = [];
+      streamingSendPromises = [];
       resolve(streamingTranscript.trim());
       return;
     }
-    // Send close message to get final results
-    if (streamingSocket.readyState === WebSocket.OPEN) {
-      streamingSocket.send(JSON.stringify({ type: 'CloseStream' }));
-    }
-    // Wait briefly for any remaining final results, then close
-    const timeout = setTimeout(() => {
+    (async () => {
+      flushPendingStreamingChunks();
+      await waitForStreamingAudioSends();
+
+      // Send close message only after every recorded audio blob has actually left the browser.
+      if (streamingSocket?.readyState === WebSocket.OPEN) {
+        streamingSocket.send(JSON.stringify({ type: 'CloseStream' }));
+      }
+
+      // Wait briefly for any remaining final results, then close
+      const timeout = setTimeout(() => {
+        streamingSocket?.close();
+        streamingSocket = null;
+        pendingStreamingChunks = [];
+        streamingSendPromises = [];
+        resolve(streamingTranscript.trim());
+      }, 2200);
+
+      streamingSocket?.addEventListener('close', () => {
+        clearTimeout(timeout);
+        streamingSocket = null;
+        pendingStreamingChunks = [];
+        streamingSendPromises = [];
+        resolve(streamingTranscript.trim());
+      }, { once: true });
+    })().catch((error) => {
+      streamingSocketFailed = true;
+      console.error('[Deepgram WS] close failed', error);
       streamingSocket?.close();
       streamingSocket = null;
       pendingStreamingChunks = [];
+      streamingSendPromises = [];
       resolve(streamingTranscript.trim());
-    }, 1500);
-
-    streamingSocket.addEventListener('close', () => {
-      clearTimeout(timeout);
-      streamingSocket = null;
-      pendingStreamingChunks = [];
-      resolve(streamingTranscript.trim());
-    }, { once: true });
+    });
   });
 }
 
