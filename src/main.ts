@@ -43,6 +43,7 @@ let polishShortcut = localStorage.getItem(POLISH_SHORTCUT_KEY) || DEFAULT_POLISH
 let captureTarget: 'dictation' | 'polish' | null = null;
 let pressedShortcutModifiers = new Set<string>();
 let holdToTalkEnabled = false;
+let releasePollActive = false;
 let transcriptionProvider = (localStorage.getItem(PROVIDER_KEY) as TranscriptionProvider) || 'groq';
 let historyItems: HistoryItem[] = loadHistory();
 let selectedHistoryId = historyItems[0]?.id || '';
@@ -811,6 +812,12 @@ async function installShortcut(next: string) {
       holdToTalkEnabled = true;
       setStatus('success', `Hold-to-talk shortcut registered: ${formatShortcutLabel(next)}. Release stops recording.`);
       addDebugEvent('push_to_talk_hook_registered', { shortcut: next });
+      try {
+        await register(next, () => startRecordingFromGlobalShortcutBackup());
+        addDebugEvent('global_shortcut_hold_backup_registered', { shortcut: next });
+      } catch (backupError) {
+        addDebugEvent('global_shortcut_hold_backup_failed', { shortcut: next, error: String(backupError) });
+      }
       return;
     } catch (error) {
       addDebugEvent('push_to_talk_hook_failed_falling_back', String(error));
@@ -933,6 +940,7 @@ async function setupPushToTalkListeners() {
 function startRecordingFromPushToTalk() {
   if (recorder?.state === 'recording' || recordingTransitionInFlight || recordingFinishing) {
     addDebugEvent('push_to_talk_down_ignored', { recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
+    beginShortcutReleasePoll('push_to_talk_down_ignored');
     return;
   }
   stopAfterStartRequested = false;
@@ -940,6 +948,36 @@ function startRecordingFromPushToTalk() {
   miniWidgetLabel.textContent = 'Shortcut active';
   miniWidgetState.textContent = 'Opening mic';
   toggleRecording();
+  beginShortcutReleasePoll('push_to_talk_down');
+}
+
+function startRecordingFromGlobalShortcutBackup() {
+  addDebugEvent('global_shortcut_hold_backup_fired', { recorderState: recorder?.state || null, transition: recordingTransitionInFlight, finishing: recordingFinishing });
+  startRecordingFromPushToTalk();
+}
+
+async function beginShortcutReleasePoll(source: string) {
+  if (!isTauriRuntime || releasePollActive) return;
+  releasePollActive = true;
+  addDebugEvent('shortcut_release_poll_start', { source });
+
+  try {
+    for (let attempt = 0; attempt < 1200; attempt += 1) {
+      await sleep(50);
+      const stillPressed = await invoke<boolean>('is_push_to_talk_pressed');
+      if (!stillPressed) {
+        addDebugEvent('shortcut_release_poll_released', { source, attempt });
+        await stopRecordingFromPushToTalk();
+        return;
+      }
+      if (attempt % 20 === 0) addDebugEvent('shortcut_release_poll_still_pressed', { source, attempt });
+    }
+    addDebugEvent('shortcut_release_poll_timeout', { source });
+  } catch (error) {
+    addDebugEvent('shortcut_release_poll_error', { source, error: String(error) });
+  } finally {
+    releasePollActive = false;
+  }
 }
 
 async function stopRecordingFromPushToTalk() {
