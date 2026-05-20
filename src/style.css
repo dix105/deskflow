@@ -285,3 +285,89 @@ kbd { display: inline-flex; min-width: 25px; justify-content: center; margin: 0 
   .settings-main { padding: 28px; }
   .mini-widget { bottom: 18px; min-width: 210px; }
 }
+
+/* Hallmark-inspired polish pass: sharper contrast, fewer beige panels, cleaner desktop feel. */
+body, #app, .app-layout { background: #f3f3f0; }
+.app-layout { grid-template-columns: 206px minmax(0, 1fr); }
+.side-rail {
+  margin: 12px 0 12px 12px;
+  min-height: calc(100vh - 24px);
+  border: 1px solid #dedbd3;
+  border-radius: 22px;
+  background: #111;
+  color: #fff;
+  box-shadow: 0 18px 48px rgba(0,0,0,.12);
+}
+.brand-lockup, .nav-item, .rail-footer button, .nav-item span { color: #fff; }
+.brand-bars i { background: #fff; }
+.brand-lockup em { background: rgba(255,255,255,.12); color: #fff; }
+.nav-item { color: rgba(255,255,255,.74); border-radius: 14px; padding: 10px 12px; }
+.nav-item:hover, .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
+.rail-footer button { border-radius: 14px; }
+.rail-footer button:hover { background: rgba(255,255,255,.12); }
+.content-shell {
+  margin: 12px;
+  border: 1px solid #dedbd3;
+  border-radius: 26px;
+  background: #fbfaf7;
+  padding-top: 34px;
+  box-shadow: 0 20px 70px rgba(0,0,0,.08);
+}
+.view-panel { padding-inline: min(5vw, 76px); }
+h1 { font-size: clamp(30px, 3.3vw, 48px); letter-spacing: -.065em; }
+h2 { font-size: clamp(30px, 3vw, 44px); }
+.page-head p { max-width: 720px; font-size: 16px; color: #62605a; }
+.promo-card,
+.setup-card,
+.provider-card,
+.shortcut-card,
+.stats-strip article,
+.debug-card,
+.scratchpad-panel,
+.transform-card,
+.dictionary-editor,
+.list-card,
+.style-grid article {
+  border-color: #dedbd3;
+  border-radius: 24px;
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 14px 40px rgba(0,0,0,.055);
+}
+.promo-card {
+  min-height: 150px;
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.promo-card::after { background: radial-gradient(circle, rgba(255,255,255,.12), transparent 62%); }
+.promo-card h2, .promo-card p { color: #fff; }
+.promo-card p { opacity: .72; }
+.console-kicker, .shortcut-card span, .stats-strip span, .shortcut-large > span { color: #7c7a72; }
+.primary-btn, .shortcut-large .soft-btn { border-radius: 999px; background: #000; }
+.soft-btn, .secondary-btn, .history-actions button, .rewrite-actions button { border-radius: 999px; }
+.hotkey-card { grid-template-columns: 1fr; padding: 24px; box-shadow: 0 18px 48px rgba(0,0,0,.075); }
+.hotkey-footer { grid-template-columns: 1fr; }
+.record-orb { border-radius: 999px; background: #111; border-color: #111; }
+.record-orb .orb-core, .record-orb > span { background: #fff; border-radius: 999px; }
+.provider-row { border-radius: 20px; background: #f7f6f2; }
+.provider-row.active { border-color: #111; box-shadow: 0 0 0 4px rgba(0,0,0,.06); }
+.provider-option.active em { background: #000; }
+input, textarea, .rewrite-output { border-radius: 16px; background: #fff; }
+.settings-row { background: #f7f6f2; border-color: #e3e0d8; }
+.drawer-panel { border-radius: 28px; }
+.mini-widget {
+  min-width: 214px;
+  min-height: 50px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.92);
+  color: #fff;
+  box-shadow: 0 16px 44px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.mini-widget em { background: rgba(255,255,255,.12); color: rgba(255,255,255,.78); }
+.mini-widget.recording { border-color: rgba(255,255,255,.12); background: rgba(0,0,0,.94); box-shadow: 0 18px 48px rgba(0,0,0,.34); }
+.mini-widget.recording em, .mini-widget.speaking em { background: #fff; color: #000; }
+.mini-wave i, .mini-widget.recording .mini-wave i, .mini-widget.speaking .mini-wave i { background: #fff; }
+@media (max-width: 960px) {
+  .content-shell { margin: 0; border-radius: 0; }
+}
