@@ -1,77 +1,63 @@
-:root {
-  background: transparent;
-  color: white;
-}
-
+:root,
 html,
 body {
   width: 100%;
   height: 100%;
   margin: 0;
+  padding: 0;
   overflow: hidden;
-  background: transparent;
+  background: transparent !important;
   user-select: none;
 }
 
-.overlay {
-  width: 100%;
-  height: 100%;
+body {
   display: grid;
   place-items: center;
-  background: transparent;
 }
 
-.wave-pill {
-  width: 112px;
-  height: 36px;
-  padding: 0 13px;
+.overlay {
+  width: 86px;
+  height: 30px;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  background: rgba(0, 0, 0, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.11);
-  backdrop-filter: blur(18px);
+  background: #050505;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  -webkit-app-region: drag;
 }
 
-.wave-pill i {
+.overlay span {
   width: 5px;
-  height: var(--dot-height, 4px);
-  min-height: 4px;
+  height: var(--dot-height, 5px);
+  min-height: 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  opacity: 0.58;
+  background: rgba(255, 255, 255, 0.92);
+  opacity: var(--dot-opacity, 0.72);
   transform-origin: center;
-  transition: height 72ms linear, opacity 72ms linear, background-color 120ms ease;
+  transition: height 64ms linear, opacity 64ms linear;
 }
 
-.overlay.processing .wave-pill i,
-.overlay.polishing .wave-pill i {
-  animation: thinking 760ms ease-in-out infinite;
+.overlay.processing span,
+.overlay.polishing span {
+  animation: soft-wave 760ms ease-in-out infinite;
 }
 
-.overlay.processing .wave-pill i:nth-child(2),
-.overlay.polishing .wave-pill i:nth-child(2) { animation-delay: 70ms; }
-.overlay.processing .wave-pill i:nth-child(3),
-.overlay.polishing .wave-pill i:nth-child(3) { animation-delay: 140ms; }
-.overlay.processing .wave-pill i:nth-child(4),
-.overlay.polishing .wave-pill i:nth-child(4) { animation-delay: 210ms; }
-.overlay.processing .wave-pill i:nth-child(5),
-.overlay.polishing .wave-pill i:nth-child(5) { animation-delay: 280ms; }
-.overlay.processing .wave-pill i:nth-child(6),
-.overlay.polishing .wave-pill i:nth-child(6) { animation-delay: 350ms; }
-.overlay.processing .wave-pill i:nth-child(7),
-.overlay.polishing .wave-pill i:nth-child(7) { animation-delay: 420ms; }
+.overlay.processing span:nth-child(2),
+.overlay.polishing span:nth-child(2) { animation-delay: 90ms; }
+.overlay.processing span:nth-child(3),
+.overlay.polishing span:nth-child(3) { animation-delay: 180ms; }
+.overlay.processing span:nth-child(4),
+.overlay.polishing span:nth-child(4) { animation-delay: 270ms; }
+.overlay.processing span:nth-child(5),
+.overlay.polishing span:nth-child(5) { animation-delay: 360ms; }
 
-.overlay.inserted .wave-pill i {
-  background: #b8ffcc;
+.overlay.inserted span {
+  background: #baffc9;
 }
 
-@keyframes thinking {
-  0%, 100% { height: 4px; opacity: 0.38; }
+@keyframes soft-wave {
+  0%, 100% { height: 5px; opacity: .42; }
   50% { height: 18px; opacity: 1; }
 }
