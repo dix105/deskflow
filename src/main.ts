@@ -663,11 +663,11 @@ function showDictationOverlay(state: OverlayState) {
     .catch((error) => addDebugEvent('overlay_show_failed', String(error)));
 }
 
-function hideDictationOverlay(delayMs = 0) {
+function resetDictationOverlay(delayMs = 0) {
   if (!isTauriRuntime) return;
   window.setTimeout(() => {
-    invoke('hide_dictation_overlay')
-      .catch((error) => addDebugEvent('overlay_hide_failed', String(error)));
+    showDictationOverlay('ready');
+    updateDictationOverlayLevel(0);
   }, delayMs);
 }
 
@@ -1038,7 +1038,7 @@ async function polishSelectedText() {
       ? await invoke<string>('copy_selected_text')
       : rewriteInput.value.trim();
     if (!text.trim()) {
-      hideDictationOverlay();
+      resetDictationOverlay();
       setStatus('error', 'Select text first, then press the polish shortcut.');
       return;
     }
@@ -1050,10 +1050,10 @@ async function polishSelectedText() {
     if (isTauriRuntime) await invoke('paste_transcript', { text: polished });
     else rewriteOutput.textContent = polished;
     showDictationOverlay('inserted');
-    hideDictationOverlay(1100);
+    resetDictationOverlay(1100);
     setStatus('success', 'Selected text polished and pasted.');
   } catch (error) {
-    hideDictationOverlay();
+    resetDictationOverlay();
     setStatus('error', String(error));
   }
 }
@@ -1238,7 +1238,7 @@ async function toggleRecording() {
       await invoke('resume_background_media');
     }
     setStatus('error', `Mic error: ${String(error)}`);
-    hideDictationOverlay();
+    resetDictationOverlay();
     addDebugEvent('mic_error', String(error));
   } finally {
     recordingTransitionInFlight = false;
@@ -1305,7 +1305,7 @@ async function finishNativeRecording(reason: string) {
     const stats = addHistory(finalText, durationMs);
     rewriteInput.value = finalText;
     showDictationOverlay('inserted');
-    hideDictationOverlay(1100);
+    resetDictationOverlay(1100);
     setStatus('success', `${finalText !== text ? 'Native mic polished and pasted' : 'Native mic pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
   } finally {
     recordingStartedAt = 0;
@@ -1514,7 +1514,7 @@ async function transcribeStreamingResult() {
       const stats = addHistory(finalText, durationMs);
       rewriteInput.value = finalText;
       showDictationOverlay('inserted');
-      hideDictationOverlay(1100);
+      resetDictationOverlay(1100);
       setStatus('success', `${finalText !== text ? 'Streamed, polished, and pasted' : 'Streamed and pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
     } else {
       const reason = streamingSocketFailed ? 'Live stream connection failed' : 'Live stream returned no text';
@@ -1524,7 +1524,7 @@ async function transcribeStreamingResult() {
     }
   } catch (error) {
     addDebugEvent('streaming_transcription_error', String(error));
-    hideDictationOverlay();
+    resetDictationOverlay();
     setStatus('error', String(error));
   } finally {
     recorder = null;
@@ -1578,11 +1578,11 @@ async function transcribeAndPaste() {
     const stats = addHistory(finalText, durationMs);
     rewriteInput.value = finalText;
     showDictationOverlay('inserted');
-    hideDictationOverlay(1100);
+    resetDictationOverlay(1100);
     setStatus('success', `${finalText !== text ? 'Polished and pasted' : 'Pasted and saved to history'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
   } catch (error) {
     addDebugEvent('normal_transcription_error', String(error));
-    hideDictationOverlay();
+    resetDictationOverlay();
     setStatus('error', String(error));
   } finally {
     recorder = null;
@@ -1931,3 +1931,4 @@ async function loadAutostartState() {
 installShortcut(shortcut);
 installPolishShortcut(polishShortcut);
 loadAutostartState();
+showDictationOverlay('ready');
