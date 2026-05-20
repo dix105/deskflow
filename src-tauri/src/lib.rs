@@ -11,7 +11,7 @@ use std::{fs, path::PathBuf, thread, time::Duration};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Size, WindowEvent,
+    Manager, WindowEvent,
 };
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(windows)]
@@ -220,42 +220,6 @@ async fn transcribe_with_groq(
     }
 
     Ok(text)
-}
-
-#[tauri::command]
-fn show_dictation_overlay(app: tauri::AppHandle, state: String) -> Result<(), String> {
-    let Some(window) = app.get_webview_window("overlay") else {
-        return Err("Overlay window is not available".into());
-    };
-
-    let width = 98u32;
-    let height = 38u32;
-    window
-        .set_size(Size::Physical(PhysicalSize { width, height }))
-        .map_err(|e| format!("Could not size overlay: {e}"))?;
-
-    if let Ok(Some(monitor)) = window.current_monitor().or_else(|_| window.primary_monitor()) {
-        let monitor_pos = monitor.position();
-        let monitor_size = monitor.size();
-        let x = monitor_pos.x + ((monitor_size.width.saturating_sub(width)) / 2) as i32;
-        let y = monitor_pos.y + monitor_size.height.saturating_sub(height + 132) as i32;
-        let _ = window.set_position(Position::Physical(PhysicalPosition { x, y }));
-    }
-
-    let _ = window.set_always_on_top(true);
-    let _ = window.set_ignore_cursor_events(true);
-    window.show().map_err(|e| format!("Could not show overlay: {e}"))?;
-    app.emit_to("overlay", "dictation-overlay-state", state)
-        .map_err(|e| format!("Could not update overlay: {e}"))?;
-    Ok(())
-}
-
-#[tauri::command]
-fn hide_dictation_overlay(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("overlay") {
-        window.hide().map_err(|e| format!("Could not hide overlay: {e}"))?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -1211,8 +1175,6 @@ pub fn run() {
             load_transcripts,
             delete_transcript,
             get_transcripts_path,
-            show_dictation_overlay,
-            hide_dictation_overlay,
             install_push_to_talk_hook,
             is_push_to_talk_pressed,
             start_native_recording,

@@ -1,6 +1,6 @@
 import './style.css';
 import { invoke } from '@tauri-apps/api/core';
-import { emit, listen } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 
@@ -30,7 +30,6 @@ type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms'
 type RewriteMode = 'clean' | 'polish' | 'professional' | 'shorter' | 'friendly';
 type TranscriptionProvider = 'groq' | 'elevenlabs' | 'sarvam' | 'deepgram';
 type RecordingMode = 'hold' | 'toggle';
-type OverlayState = 'ready' | 'listening' | 'processing' | 'polishing' | 'inserted';
 
 type HistoryItem = {
   id: string;
@@ -657,26 +656,6 @@ function setStatus(kind: StatusKind, message: string) {
     : '<span class="button-dot"></span>Start recording';
 }
 
-function showDictationOverlay(state: OverlayState) {
-  if (!isTauriRuntime) return;
-  invoke('show_dictation_overlay', { state })
-    .catch((error) => addDebugEvent('overlay_show_failed', String(error)));
-}
-
-function resetDictationOverlay(delayMs = 0) {
-  if (!isTauriRuntime) return;
-  window.setTimeout(() => {
-    showDictationOverlay('ready');
-    updateDictationOverlayLevel(0);
-  }, delayMs);
-}
-
-function updateDictationOverlayLevel(level: number) {
-  if (!isTauriRuntime) return;
-  emit('dictation-overlay-level', level)
-    .catch((error) => addDebugEvent('overlay_level_failed', String(error)));
-}
-
 function addDebugEvent(label: string, data?: unknown) {
   debugEvents.push({ time: new Date().toISOString(), label, data });
   debugEvents = debugEvents.slice(-300);
@@ -759,7 +738,6 @@ function startWaveformMonitor(stream: MediaStream) {
     }
 
     miniWidget.classList.toggle('speaking', volume > 0.035);
-    updateDictationOverlayLevel(level);
     bars.forEach((bar, index) => {
       const height = 12 + level * 34 * multipliers[index % multipliers.length];
       bar.style.setProperty('--bar-height', `${Math.max(10, Math.min(48, height))}px`);
@@ -1032,14 +1010,12 @@ async function polishSelectedText() {
   }
 
   try {
-    showDictationOverlay('polishing');
-    setStatus('working', 'Polishing selected text…');
+      setStatus('working', 'Polishing selected text…');
     const text = isTauriRuntime
       ? await invoke<string>('copy_selected_text')
       : rewriteInput.value.trim();
     if (!text.trim()) {
-      resetDictationOverlay();
-      setStatus('error', 'Select text first, then press the polish shortcut.');
+            setStatus('error', 'Select text first, then press the polish shortcut.');
       return;
     }
     const polished = await invoke<string>('rewrite_text', {
@@ -1049,12 +1025,9 @@ async function polishSelectedText() {
     });
     if (isTauriRuntime) await invoke('paste_transcript', { text: polished });
     else rewriteOutput.textContent = polished;
-    showDictationOverlay('inserted');
-    resetDictationOverlay(1100);
-    setStatus('success', 'Selected text polished and pasted.');
+          setStatus('success', 'Selected text polished and pasted.');
   } catch (error) {
-    resetDictationOverlay();
-    setStatus('error', String(error));
+        setStatus('error', String(error));
   }
 }
 
@@ -1103,7 +1076,6 @@ function startRecordingFromPushToTalk() {
   miniWidget.classList.add('shortcut-active');
   miniWidgetLabel.textContent = 'Shortcut active';
   miniWidgetState.textContent = 'Opening mic';
-  showDictationOverlay('ready');
   toggleRecording();
 }
 
@@ -1148,7 +1120,6 @@ async function toggleRecording() {
   miniWidget.classList.add('shortcut-active');
   miniWidgetLabel.textContent = 'Shortcut active';
   miniWidgetState.textContent = 'Opening mic';
-  showDictationOverlay('ready');
 
   try {
     syncApiKey();
@@ -1176,7 +1147,6 @@ async function toggleRecording() {
       recordingStartedAt = Date.now();
       addDebugEvent('native_recording_started');
       setStatus('recording', recordingMode === 'hold' ? 'Recording with native mic… release shortcut to stop.' : 'Recording with native mic… press shortcut again to stop.');
-      showDictationOverlay('listening');
       if (stopAfterStartRequested) {
         stopAfterStartRequested = false;
         requestStopRecording('stop_after_start_requested');
@@ -1227,7 +1197,6 @@ async function toggleRecording() {
     }
     addDebugEvent('media_recorder_started', { state: recorder.state, streaming, mimeType: recorder.mimeType });
     setStatus('recording', recordingMode === 'hold' ? 'Recording… release shortcut to stop.' : 'Recording… press shortcut again or click widget to stop.');
-    showDictationOverlay('listening');
     if (stopAfterStartRequested) {
       stopAfterStartRequested = false;
       requestStopRecording('stop_after_start_requested');
@@ -1238,8 +1207,7 @@ async function toggleRecording() {
       await invoke('resume_background_media');
     }
     setStatus('error', `Mic error: ${String(error)}`);
-    resetDictationOverlay();
-    addDebugEvent('mic_error', String(error));
+        addDebugEvent('mic_error', String(error));
   } finally {
     recordingTransitionInFlight = false;
     if (!nativeRecordingActive && recorder?.state !== 'recording') miniWidget.classList.remove('shortcut-active');
@@ -1278,7 +1246,6 @@ function shouldUseNativeMic() {
 async function finishNativeRecording(reason: string) {
   try {
     addDebugEvent('native_recording_finish_start', { reason });
-    showDictationOverlay('processing');
     setStatus('working', `Transcribing native recording with ${providerLabel()}…`);
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
     const bytes = await invoke<number[]>('stop_native_recording');
@@ -1304,9 +1271,7 @@ async function finishNativeRecording(reason: string) {
     }
     const stats = addHistory(finalText, durationMs);
     rewriteInput.value = finalText;
-    showDictationOverlay('inserted');
-    resetDictationOverlay(1100);
-    setStatus('success', `${finalText !== text ? 'Native mic polished and pasted' : 'Native mic pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
+          setStatus('success', `${finalText !== text ? 'Native mic polished and pasted' : 'Native mic pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
   } finally {
     recordingStartedAt = 0;
     recordingFinishing = false;
@@ -1497,7 +1462,6 @@ async function transcribeStreamingResult() {
   try {
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
     addDebugEvent('streaming_transcription_finish_start', { durationMs, bufferedChunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)) });
-    showDictationOverlay('processing');
     setStatus('working', 'Finishing stream…');
     const text = await closeStreamingSocket();
     addDebugEvent('streaming_transcription_finish_result', { text, length: text.length, socketFailed: streamingSocketFailed });
@@ -1513,9 +1477,7 @@ async function transcribeStreamingResult() {
       }
       const stats = addHistory(finalText, durationMs);
       rewriteInput.value = finalText;
-      showDictationOverlay('inserted');
-      resetDictationOverlay(1100);
-      setStatus('success', `${finalText !== text ? 'Streamed, polished, and pasted' : 'Streamed and pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
+                setStatus('success', `${finalText !== text ? 'Streamed, polished, and pasted' : 'Streamed and pasted'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
     } else {
       const reason = streamingSocketFailed ? 'Live stream connection failed' : 'Live stream returned no text';
       setStatus('working', `${reason} — retrying with normal transcription…`);
@@ -1524,8 +1486,7 @@ async function transcribeStreamingResult() {
     }
   } catch (error) {
     addDebugEvent('streaming_transcription_error', String(error));
-    resetDictationOverlay();
-    setStatus('error', String(error));
+        setStatus('error', String(error));
   } finally {
     recorder = null;
     chunks = [];
@@ -1548,7 +1509,6 @@ function pickMimeType() {
 async function transcribeAndPaste() {
   try {
     addDebugEvent('normal_transcription_start', { provider: transcriptionProvider, chunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)) });
-    showDictationOverlay('processing');
     setStatus('working', autoPolishEnabled ? `Transcribing with ${providerLabel()} before polish…` : `Transcribing with ${providerLabel()} and pasting into the focused app…`);
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
     const blob = new Blob(chunks, { type: 'audio/webm' });
@@ -1577,13 +1537,10 @@ async function transcribeAndPaste() {
 
     const stats = addHistory(finalText, durationMs);
     rewriteInput.value = finalText;
-    showDictationOverlay('inserted');
-    resetDictationOverlay(1100);
-    setStatus('success', `${finalText !== text ? 'Polished and pasted' : 'Pasted and saved to history'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
+          setStatus('success', `${finalText !== text ? 'Polished and pasted' : 'Pasted and saved to history'}: ${stats.words} words · ${stats.wordsPerMinute} WPM.`);
   } catch (error) {
     addDebugEvent('normal_transcription_error', String(error));
-    resetDictationOverlay();
-    setStatus('error', String(error));
+        setStatus('error', String(error));
   } finally {
     recorder = null;
     chunks = [];
@@ -1604,7 +1561,6 @@ async function polishDictationIfEnabled(text: string) {
   const key = apiKeyInput.value.trim();
   if (!key) throw new Error('Auto polish needs your Groq API key in Settings.');
 
-  showDictationOverlay('polishing');
   setStatus('working', 'Polishing dictated text before paste…');
   const polished = await invoke<string>('rewrite_text', {
     apiKey: key,
@@ -1931,4 +1887,3 @@ async function loadAutostartState() {
 installShortcut(shortcut);
 installPolishShortcut(polishShortcut);
 loadAutostartState();
-showDictationOverlay('ready');
