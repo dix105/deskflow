@@ -799,6 +799,7 @@ textarea { line-height: 1.55; }
 .drawer-backdrop { background: rgba(6,5,4,.42); backdrop-filter: blur(8px); }
 .drawer-panel {
   width: min(1080px, calc(100vw - 48px));
+  max-height: calc(100vh - 56px);
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 34px;
   background: #fbf7ef;
@@ -810,9 +811,12 @@ textarea { line-height: 1.55; }
 .settings-sidebar button.active,
 .settings-sidebar button:hover { background: rgba(255,255,255,.12); color: #fff; }
 .settings-sidebar hr { border-color: rgba(255,255,255,.12); }
-.settings-main { padding: 48px 60px; }
+.settings-main { padding: 48px 60px; overflow: auto; max-height: calc(100vh - 56px); }
 .drawer-header h2 { font-family: 'Instrument Serif', Georgia, serif; font-size: 56px; font-weight: 400; letter-spacing: -.05em; }
+.drawer-header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; font-weight: 700; }
 .icon-btn { width: 42px; height: 42px; border-radius: 999px; background: rgba(10,10,9,.06); }
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
 .settings-row {
   grid-template-columns: minmax(0,1fr) minmax(190px, 240px) auto;
   padding: 20px;

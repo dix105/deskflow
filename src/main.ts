@@ -22,6 +22,7 @@ const NATIVE_MIC_KEY = 'flowDeskNativeMic';
 const POLISH_SHORTCUT_KEY = 'flowDeskPolishShortcut';
 const AUTO_POLISH_KEY = 'flowDeskAutoPolish';
 const VOICE_TRIGGER_KEY = 'flowDeskVoiceTrigger';
+const VOICE_TRIGGER_PHRASE_KEY = 'flowDeskVoiceTriggerPhrase';
 const DEBUG_EXPECTED_WORDS_KEY = 'flowDeskDebugExpectedWords';
 const AUDIO_RESTORE_DELAY_MS = 150;
 const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
@@ -65,6 +66,7 @@ let fastMicEnabled = localStorage.getItem(FAST_MIC_KEY) === 'true';
 let nativeMicEnabled = localStorage.getItem(NATIVE_MIC_KEY) !== 'false';
 let autoPolishEnabled = localStorage.getItem(AUTO_POLISH_KEY) === 'true';
 let voiceTriggerEnabled = localStorage.getItem(VOICE_TRIGGER_KEY) === 'true';
+let voiceTriggerPhrase = localStorage.getItem(VOICE_TRIGGER_PHRASE_KEY) || 'Alexa';
 let recordingMode = (localStorage.getItem(RECORDING_MODE_KEY) as RecordingMode) || 'hold';
 let audioDuckingVolume = Number(localStorage.getItem(AUDIO_DUCKING_VOLUME_KEY) || '35');
 if (!Number.isFinite(audioDuckingVolume)) audioDuckingVolume = 35;
@@ -232,8 +234,8 @@ app.innerHTML = `
     <aside id="settingsDrawer" class="settings-drawer" aria-hidden="true">
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-panel" role="dialog" aria-modal="true" aria-label="Settings">
-        <div class="settings-sidebar"><p>SETTINGS</p><button class="active" type="button">☷ General</button><button type="button">▭ System</button><button type="button"># Vibe coding</button><button type="button">⚗ Experimental</button><hr><p>ACCOUNT</p><button type="button">◎ Account</button><button type="button">♙ Team</button><button type="button">▰ Plans and Billing</button></div>
-        <div class="settings-main"><div class="drawer-header"><div><h2>General</h2></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Dictation shortcut</strong><span>Use this from any app.</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Dictation mode</strong><span>Hold key, or press once to start and again to stop.</span></div><select id="recordingMode"><option value="hold">Hold to talk</option><option value="toggle">Press once / press again</option></select></label><div class="settings-row"><div><strong>Polish text shortcut</strong><span>Select text anywhere, then polish and paste back</span></div><button id="capturePolishShortcut" class="soft-btn" type="button"><span id="polishShortcutValue">Cmd/Ctrl + Shift + P</span></button><button id="savePolishShortcut" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Auto polish dictated text</strong><span>After transcription, polish the text before pasting it into the focused app.</span></div><input id="autoPolish" type="checkbox" /></label><label class="settings-row"><div><strong>Voice trigger</strong><span>Local OpenWakeWord listener. Say “Alexa” to start dictation without sending background audio to the cloud.</span></div><input id="voiceTrigger" type="checkbox" /></label><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><label class="settings-row"><div><strong>Fast mic mode</strong><span>Keep the WebView mic warm so recording starts faster.</span></div><input id="fastMic" type="checkbox" /></label><label class="settings-row"><div><strong>Native mic backend</strong><span>Use Windows native audio capture for faster start. Live Deepgram streaming still uses WebView mic.</span></div><input id="nativeMic" type="checkbox" /></label><label class="settings-row"><div><strong>Audio ducking volume</strong><span>Background volume while recording. Restores as soon as recording stops.</span></div><input id="audioDuckingVolume" type="range" min="0" max="100" step="5" /><span id="audioDuckingVolumeValue">35%</span></label><div class="settings-row"><div><strong>Test audio ducking</strong><span>Lowers volume briefly, then restores it automatically.</span></div><button id="testAudioDucking" class="soft-btn" type="button">Run test</button></div><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></div>
+        <div class="settings-sidebar"><p>SETTINGS</p><button class="active" data-settings-tab="general" type="button">☷ General</button><button data-settings-tab="voice" type="button">◉ Voice trigger</button><button data-settings-tab="audio" type="button">▭ Audio</button></div>
+        <div class="settings-main"><div class="drawer-header"><div><h2 id="settingsTitle">General</h2><p id="settingsSubtitle">Core keys and typing behavior.</p></div><button id="closeSettings" class="icon-btn" type="button">×</button></div><section class="settings-panel active" data-settings-panel="general"><label class="settings-row"><div><strong>Groq API key</strong><span>Used for transcription and rewrites</span></div><input id="drawerApiKey" type="password" autocomplete="off" placeholder="gsk_..." /></label><div class="settings-row"><div><strong>Dictation shortcut</strong><span>Use this from any app.</span></div><button id="captureShortcutMirror" class="soft-btn" type="button"><span id="shortcutValueMirror">Cmd/Ctrl + Alt + Space</span></button><button id="saveMirror" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Dictation mode</strong><span>Hold key, or press once to start and again to stop.</span></div><select id="recordingMode"><option value="hold">Hold to talk</option><option value="toggle">Press once / press again</option></select></label><div class="settings-row"><div><strong>Polish text shortcut</strong><span>Select text anywhere, then polish and paste back</span></div><button id="capturePolishShortcut" class="soft-btn" type="button"><span id="polishShortcutValue">Cmd/Ctrl + Shift + P</span></button><button id="savePolishShortcut" class="soft-btn" type="button">Save</button></div><label class="settings-row"><div><strong>Auto polish dictated text</strong><span>After transcription, polish the text before pasting it into the focused app.</span></div><input id="autoPolish" type="checkbox" /></label><label class="settings-row"><div><strong>Launch app at login</strong><span>Keep FlowDesk ready in the tray</span></div><input id="autostart" type="checkbox" /></label></section><section class="settings-panel" data-settings-panel="voice"><label class="settings-row"><div><strong>Voice trigger</strong><span>Local OpenWakeWord listener. Background audio stays on this device.</span></div><input id="voiceTrigger" type="checkbox" /></label><label class="settings-row"><div><strong>Trigger phrase</strong><span>Current bundled local model supports “Alexa”. Custom text needs a trained wake-word model.</span></div><input id="voiceTriggerPhrase" type="text" value="Alexa" autocomplete="off" /></label></section><section class="settings-panel" data-settings-panel="audio"><label class="settings-row"><div><strong>Pause background media</strong><span>Pause/resume the current video or music while recording.</span></div><input id="pauseBackgroundMedia" type="checkbox" /></label><label class="settings-row"><div><strong>Fast mic mode</strong><span>Keep the WebView mic warm so recording starts faster.</span></div><input id="fastMic" type="checkbox" /></label><label class="settings-row"><div><strong>Native mic backend</strong><span>Use Windows native audio capture for faster start. Live Deepgram streaming still uses WebView mic.</span></div><input id="nativeMic" type="checkbox" /></label><label class="settings-row"><div><strong>Audio ducking volume</strong><span>Background volume while recording. Restores as soon as recording stops.</span></div><input id="audioDuckingVolume" type="range" min="0" max="100" step="5" /><span id="audioDuckingVolumeValue">35%</span></label><div class="settings-row"><div><strong>Test audio ducking</strong><span>Lowers volume briefly, then restores it automatically.</span></div><button id="testAudioDucking" class="soft-btn" type="button">Run test</button></div></section></div>
       </section>
     </aside>
 
@@ -269,12 +271,15 @@ const settingsButton = document.querySelector<HTMLButtonElement>('#settingsButto
 const closeSettingsButton = document.querySelector<HTMLButtonElement>('#closeSettings')!;
 const drawerBackdrop = document.querySelector<HTMLDivElement>('#drawerBackdrop')!;
 const settingsDrawer = document.querySelector<HTMLElement>('#settingsDrawer')!;
+const settingsTitle = document.querySelector<HTMLElement>('#settingsTitle')!;
+const settingsSubtitle = document.querySelector<HTMLElement>('#settingsSubtitle')!;
 const autostartInput = document.querySelector<HTMLInputElement>('#autostart')!;
 const pauseBackgroundMediaInput = document.querySelector<HTMLInputElement>('#pauseBackgroundMedia')!;
 const autoPolishInput = document.querySelector<HTMLInputElement>('#autoPolish')!;
 const fastMicInput = document.querySelector<HTMLInputElement>('#fastMic')!;
 const nativeMicInput = document.querySelector<HTMLInputElement>('#nativeMic')!;
 const voiceTriggerInput = document.querySelector<HTMLInputElement>('#voiceTrigger')!;
+const voiceTriggerPhraseInput = document.querySelector<HTMLInputElement>('#voiceTriggerPhrase')!;
 const recordingModeInput = document.querySelector<HTMLSelectElement>('#recordingMode')!;
 const audioDuckingVolumeInput = document.querySelector<HTMLInputElement>('#audioDuckingVolume')!;
 const audioDuckingVolumeValue = document.querySelector<HTMLElement>('#audioDuckingVolumeValue')!;
@@ -316,6 +321,7 @@ autoPolishInput.checked = autoPolishEnabled;
 fastMicInput.checked = fastMicEnabled;
 nativeMicInput.checked = nativeMicEnabled;
 voiceTriggerInput.checked = voiceTriggerEnabled;
+voiceTriggerPhraseInput.value = voiceTriggerPhrase;
 recordingModeInput.value = recordingMode;
 audioDuckingVolumeInput.value = String(audioDuckingVolume);
 audioDuckingVolumeValue.textContent = `${audioDuckingVolume}%`;
@@ -436,6 +442,10 @@ openRewriteButton?.addEventListener('click', () => setView('transforms'));
 startFromScratchpadButton.addEventListener('click', () => toggleRecording());
 testAudioDuckingButton.addEventListener('click', () => testAudioDucking());
 
+document.querySelectorAll<HTMLButtonElement>('[data-settings-tab]').forEach((button) => {
+  button.addEventListener('click', () => setSettingsPanel(button.dataset.settingsTab || 'general'));
+});
+
 window.addEventListener('keydown', async (event) => {
   if (!captureTarget && shortcutMatchesEvent(shortcut, event)) {
     event.preventDefault();
@@ -544,6 +554,17 @@ voiceTriggerInput.addEventListener('change', async () => {
     voiceTriggerInput.checked = false;
     localStorage.setItem(VOICE_TRIGGER_KEY, 'false');
     setStatus('error', `Voice trigger failed: ${String(error)}`);
+  }
+});
+
+voiceTriggerPhraseInput.addEventListener('change', () => {
+  voiceTriggerPhrase = voiceTriggerPhraseInput.value.trim() || 'Alexa';
+  voiceTriggerPhraseInput.value = voiceTriggerPhrase;
+  localStorage.setItem(VOICE_TRIGGER_PHRASE_KEY, voiceTriggerPhrase);
+  if (voiceTriggerPhrase.toLowerCase() !== 'alexa') {
+    setStatus('idle', 'Saved text, but the bundled local wake-word model only detects “Alexa” for now. Custom phrases need a trained model file.');
+  } else {
+    setStatus('success', 'Voice trigger phrase set to Alexa.');
   }
 });
 
@@ -679,6 +700,23 @@ function closeSettings() {
   settingsDrawer.classList.remove('open');
   settingsDrawer.setAttribute('aria-hidden', 'true');
   settingsButton?.setAttribute('aria-expanded', 'false');
+}
+
+function setSettingsPanel(panel: string) {
+  const meta: Record<string, { title: string; subtitle: string }> = {
+    general: { title: 'General', subtitle: 'Core keys and typing behavior.' },
+    voice: { title: 'Voice trigger', subtitle: 'Local wake-word detection before dictation starts.' },
+    audio: { title: 'Audio', subtitle: 'Mic, media pause, and volume behavior.' },
+  };
+  const next = meta[panel] ? panel : 'general';
+  document.querySelectorAll<HTMLButtonElement>('[data-settings-tab]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.settingsTab === next);
+  });
+  document.querySelectorAll<HTMLElement>('[data-settings-panel]').forEach((section) => {
+    section.classList.toggle('active', section.dataset.settingsPanel === next);
+  });
+  settingsTitle.textContent = meta[next].title;
+  settingsSubtitle.textContent = meta[next].subtitle;
 }
 
 function setStatus(kind: StatusKind, message: string) {
