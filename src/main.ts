@@ -28,6 +28,9 @@ const VOICE_TRIGGER_ENGINE_KEY = 'flowDeskVoiceTriggerEngine';
 const DEBUG_EXPECTED_WORDS_KEY = 'flowDeskDebugExpectedWords';
 const AUDIO_RESTORE_DELAY_MS = 150;
 const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
+const VOICE_TRIGGER_START_DELAY_MS = 450;
+const VOICE_STOP_TAIL_DISCARD_MS = 1400;
+const RECORDING_CHUNK_MS = 250;
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -61,6 +64,8 @@ let recordingTransitionInFlight = false;
 let recordingFinishing = false;
 let nativeRecordingActive = false;
 let stopAfterStartRequested = false;
+let recordingStartedByVoiceTrigger = false;
+let recordingStopReason = '';
 let isAudioDucked = false;
 let totalWordsSpoken = loadTotalWordsSpoken(historyItems);
 let audioDuckingEnabled = true;
@@ -1228,8 +1233,12 @@ function startRecordingFromVoiceTrigger() {
   stopAfterStartRequested = false;
   miniWidget.classList.add('shortcut-active');
   miniWidgetLabel.textContent = 'Voice trigger active';
-  miniWidgetState.textContent = 'Opening mic';
-  toggleRecording();
+  miniWidgetState.textContent = 'Starting after wake word';
+  recordingStartedByVoiceTrigger = true;
+  window.setTimeout(() => {
+    if (!recordingStartedByVoiceTrigger || recorder?.state === 'recording' || nativeRecordingActive || recordingTransitionInFlight || recordingFinishing) return;
+    toggleRecording();
+  }, VOICE_TRIGGER_START_DELAY_MS);
 }
 
 function stopRecordingFromVoiceTrigger() {
@@ -1310,6 +1319,7 @@ async function toggleRecording() {
   }
   lastRecordingToggleAt = now;
   if (requestStopRecording('toggle')) return;
+  recordingStopReason = '';
 
   recordingTransitionInFlight = true;
   miniWidget.classList.add('shortcut-active');
@@ -1385,8 +1395,8 @@ async function toggleRecording() {
 
     recordingStartedAt = Date.now();
     // Use timeslice for streaming (250ms chunks), otherwise collect all
-    if (streaming) {
-      recorder.start(250);
+    if (streaming || recordingStartedByVoiceTrigger) {
+      recorder.start(RECORDING_CHUNK_MS);
     } else {
       recorder.start();
     }
@@ -1410,6 +1420,7 @@ async function toggleRecording() {
 }
 
 function requestStopRecording(reason: string) {
+  recordingStopReason = reason;
   if (nativeRecordingActive) {
     recordingFinishing = true;
     nativeRecordingActive = false;
@@ -1435,7 +1446,7 @@ function requestStopRecording(reason: string) {
 }
 
 function shouldUseNativeMic() {
-  return isTauriRuntime && nativeMicEnabled && !isStreamingActive();
+  return isTauriRuntime && nativeMicEnabled && !isStreamingActive() && !recordingStartedByVoiceTrigger;
 }
 
 async function finishNativeRecording(reason: string) {
@@ -1471,6 +1482,8 @@ async function finishNativeRecording(reason: string) {
     recordingStartedAt = 0;
     recordingFinishing = false;
     recordingTransitionInFlight = false;
+    recordingStartedByVoiceTrigger = false;
+    recordingStopReason = '';
     miniWidget.classList.remove('shortcut-active');
     await restoreAudioAfterDelay();
     if (pauseBackgroundMediaEnabled && isTauriRuntime) {
@@ -1688,6 +1701,8 @@ async function transcribeStreamingResult() {
     recordingStartedAt = 0;
     recordingFinishing = false;
     recordingTransitionInFlight = false;
+    recordingStartedByVoiceTrigger = false;
+    recordingStopReason = '';
     addDebugEvent('recording_cleanup_complete', { path: 'streaming' });
     await restoreAudioAfterDelay();
     if (pauseBackgroundMediaEnabled && isTauriRuntime) {
@@ -1706,7 +1721,8 @@ async function transcribeAndPaste() {
     addDebugEvent('normal_transcription_start', { provider: transcriptionProvider, chunks: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)) });
     setStatus('working', autoPolishEnabled ? `Transcribing with ${providerLabel()} before polish…` : `Transcribing with ${providerLabel()} and pasting into the focused app…`);
     const durationMs = recordingStartedAt ? Math.max(1000, Date.now() - recordingStartedAt) : 0;
-    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const audioChunks = chunksForTranscription();
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
     const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
 
     const text = autoPolishEnabled
@@ -1742,6 +1758,8 @@ async function transcribeAndPaste() {
     recordingStartedAt = 0;
     recordingFinishing = false;
     recordingTransitionInFlight = false;
+    recordingStartedByVoiceTrigger = false;
+    recordingStopReason = '';
     addDebugEvent('recording_cleanup_complete', { path: 'normal' });
     await restoreAudioAfterDelay();
     if (pauseBackgroundMediaEnabled && isTauriRuntime) {
@@ -1763,6 +1781,20 @@ async function polishDictationIfEnabled(text: string) {
     mode: 'polish',
   });
   return polished.trim() || text;
+}
+
+function chunksForTranscription() {
+  if (recordingStopReason !== 'voice_stop_phrase' || chunks.length <= 1) return chunks;
+
+  const chunksToDiscard = Math.max(1, Math.ceil(VOICE_STOP_TAIL_DISCARD_MS / RECORDING_CHUNK_MS));
+  const kept = chunks.slice(0, Math.max(1, chunks.length - chunksToDiscard));
+  addDebugEvent('voice_stop_tail_audio_discarded', {
+    originalChunks: chunks.length,
+    keptChunks: kept.length,
+    discardedChunks: chunks.length - kept.length,
+    discardMs: VOICE_STOP_TAIL_DISCARD_MS,
+  });
+  return kept;
 }
 
 async function pasteTextToFocusedApp(text: string) {
