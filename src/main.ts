@@ -31,6 +31,7 @@ const RECORDING_TOGGLE_DEBOUNCE_MS = 900;
 const VOICE_TRIGGER_START_DELAY_MS = 450;
 const VOICE_STOP_TAIL_DISCARD_MS = 1400;
 const RECORDING_CHUNK_MS = 250;
+const RECORDING_START_BEEP_MS = 180;
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad';
@@ -95,6 +96,7 @@ let debugEvents: { time: string; label: string; data?: unknown }[] = [];
 let pushToTalkListenersReady = false;
 let waveformContext: AudioContext | null = null;
 let waveformAnalyser: AnalyserNode | null = null;
+let soundContext: AudioContext | null = null;
 let waveformFrame = 0;
 let waveformData: Uint8Array<ArrayBuffer> | null = null;
 let waveformLastLogAt = 0;
@@ -1346,6 +1348,8 @@ async function toggleRecording() {
       isAudioDucked = true;
     }
 
+    await playRecordingStartBeep();
+
     if (shouldUseNativeMic()) {
       await invoke('start_native_recording');
       nativeRecordingActive = true;
@@ -1432,6 +1436,7 @@ function requestStopRecording(reason: string) {
       recordingTransitionInFlight = false;
     });
     restoreDuckingImmediately();
+    playRecordingStopBeep().catch((error) => addDebugEvent('stop_beep_failed', String(error)));
     return true;
   }
 
@@ -1440,6 +1445,7 @@ function requestStopRecording(reason: string) {
     addDebugEvent('recorder_stop_requested', { reason, state: recorder.state });
     recorder.stop();
     restoreDuckingImmediately();
+    playRecordingStopBeep().catch((error) => addDebugEvent('stop_beep_failed', String(error)));
     return true;
   }
   return false;
@@ -1865,6 +1871,53 @@ async function pasteTextToFocusedApp(text: string) {
     return;
   }
   await invoke('paste_transcript', { text });
+}
+
+async function playRecordingStartBeep() {
+  await playBeepSequence([
+    { frequency: 660, durationMs: 70, gain: 0.055 },
+    { frequency: 880, durationMs: 90, gain: 0.06 },
+  ]);
+  await sleep(RECORDING_START_BEEP_MS);
+}
+
+async function playRecordingStopBeep() {
+  await playBeepSequence([
+    { frequency: 880, durationMs: 65, gain: 0.05 },
+    { frequency: 520, durationMs: 120, gain: 0.055 },
+  ]);
+}
+
+async function playBeepSequence(notes: Array<{ frequency: number; durationMs: number; gain: number }>) {
+  try {
+    const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
+    soundContext ||= new AudioContextCtor();
+    if (soundContext.state === 'suspended') await soundContext.resume();
+
+    let startAt = soundContext.currentTime;
+    for (const note of notes) {
+      scheduleBeepNote(soundContext, startAt, note.frequency, note.durationMs / 1000, note.gain);
+      startAt += note.durationMs / 1000 + 0.025;
+    }
+    await sleep(notes.reduce((sum, note) => sum + note.durationMs, 0) + (notes.length - 1) * 25);
+  } catch (error) {
+    addDebugEvent('beep_sequence_failed', String(error));
+  }
+}
+
+function scheduleBeepNote(context: AudioContext, startAt: number, frequency: number, duration: number, maxGain: number) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(maxGain, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.02);
 }
 
 async function restoreAudioAfterDelay() {
