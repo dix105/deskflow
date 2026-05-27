@@ -142,81 +142,77 @@ app.innerHTML = `
 
       <section class="content-shell">
         <section class="view-panel active" data-panel="dictation">
-          <header class="page-head">
+          <header class="page-head command-head">
             <div>
-              <h1>Welcome back, Dixit</h1>
-              <p>Dictate from anywhere. Press your shortcut, speak, and paste clean text back into the app you were using.</p>
+              <span class="page-kicker">FlowDesk command deck</span>
+              <h1>Speak once. Ship clean text everywhere.</h1>
+              <p>One recorder for desktop dictation, live transcription, rewrite polish, vocabulary control, and paste-back workflows.</p>
             </div>
+            <button id="toggle" class="primary-btn hero-record-btn" type="button"><span class="button-dot"></span>Start recording</button>
           </header>
 
-          <article class="promo-card console-card">
-            <div>
-              <span class="console-kicker">Recording console</span>
-              <h2>Ready for desktop dictation</h2>
-              <p>Press the hotkey from any app. FlowDesk listens, transcribes, and pastes back into the field you were using.</p>
-              <div class="promo-actions"><button id="toggle" class="primary-btn" type="button"><span class="button-dot"></span>Start recording</button></div>
-            </div>
-            <div class="console-visual clean" aria-hidden="true">
-              <div class="wave-card"><span></span><span></span><span></span><span></span><span></span></div>
-            </div>
-          </article>
-
-          <section class="quick-shortcuts" aria-label="Keyboard shortcuts">
-            <button class="shortcut-card" data-view="transforms" type="button">
-              <span>Polish text shortcut</span>
-              <strong id="polishShortcutHome"><kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></strong>
-              <small>Select text anywhere, press shortcut, get polished text pasted back.</small>
-            </button>
-          </section>
-
-          <section class="stats-strip" aria-label="Dictation stats">
-            <article><span>Total words spoken</span><strong id="totalWordsSpoken">0</strong><small>Across saved dictations</small></article>
-            <article><span>Average speed</span><strong id="averageWordsPerMinute">—</strong><small>Words per minute</small></article>
-            <article><span>Average words</span><strong id="averageWordsPerRecording">—</strong><small>Per recording</small></article>
-          </section>
-
-          <section class="home-grid">
-            <article class="setup-card hotkey-card">
-              <div class="setup-heading">
+          <section class="command-grid">
+            <article class="recorder-panel">
+              <div class="panel-topline"><span>Recorder</span><em id="activeProviderBadge">Groq active</em></div>
+              <div class="recorder-stage">
                 <div id="recordOrb" class="record-orb"><span class="orb-core"></span><i></i><i></i><i></i><i></i></div>
-                <div><strong>Your dictation key</strong><span>Set once. Use everywhere.</span></div>
+                <div>
+                  <h2>Ready for dictation</h2>
+                  <p>Press your shortcut from any app. FlowDesk listens, transcribes, applies your Words glossary, then pastes back.</p>
+                </div>
               </div>
-              <div class="shortcut-inline shortcut-large"><span>Keyboard shortcut</span><button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span><span class="edit-pencil">✎</span></button><button id="save" class="soft-btn" type="button">Save</button></div>
-              <div class="hotkey-footer">
-                <div id="status" class="status idle">Ready. Press the shortcut to record and paste.</div>
+              <div id="status" class="status idle">Ready. Press the shortcut to record and paste.</div>
+              <div class="shortcut-console">
+                <div>
+                  <span>Dictation key</span>
+                  <button id="captureShortcut" class="shortcut-capture" type="button"><span id="shortcutValue">CommandOrControl + Alt + Space</span><span class="edit-pencil">✎</span></button>
+                </div>
+                <button id="save" class="soft-btn" type="button">Save key</button>
               </div>
             </article>
 
-            <article class="provider-card">
-              <div class="provider-card-head">
-                <div><strong>Transcription provider</strong><span>Choose which engine turns speech into text.</span></div>
-                <span id="activeProviderBadge" class="active-provider-badge">Groq active</span>
-              </div>
-              <div class="provider-list">
-                <div class="provider-row active" data-provider-row="groq">
-                  <button class="provider-option" data-provider="groq" type="button"><strong>Groq</strong><span>Whisper Large v3 Turbo</span><em>Active</em></button>
-                  <label class="field compact-field"><span>Groq API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="Groq key stored locally" /></label>
-                </div>
-                <div class="provider-row" data-provider-row="elevenlabs">
-                  <button class="provider-option" data-provider="elevenlabs" type="button"><strong>ElevenLabs</strong><span>Scribe v2 speech-to-text</span><em>Make active</em></button>
-                  <label class="field compact-field"><span>ElevenLabs API key</span><input id="elevenLabsApiKey" type="password" autocomplete="off" placeholder="ElevenLabs key stored locally" /></label>
-                </div>
-                <div class="provider-row" data-provider-row="sarvam">
-                  <button class="provider-option" data-provider="sarvam" type="button"><strong>Sarvam</strong><span>Saaras v3 speech-to-text</span><em>Make active</em></button>
-                  <label class="field compact-field"><span>Sarvam API key</span><input id="sarvamApiKey" type="password" autocomplete="off" placeholder="Sarvam key stored locally" /></label>
-                </div>
-                <div class="provider-row" data-provider-row="deepgram">
-                  <button class="provider-option" data-provider="deepgram" type="button"><strong>Deepgram</strong><span>Nova-3 · fast &amp; accurate STT</span><em>Make active</em></button>
-                  <label class="field compact-field"><span>Deepgram API key</span><input id="deepgramApiKey" type="password" autocomplete="off" placeholder="Deepgram key stored locally" /></label>
-                  <label class="field compact-field streaming-toggle"><span>Live streaming</span><small>Paste words directly as you speak</small><input id="deepgramStreaming" type="checkbox" /></label>
-                </div>
-              </div>
-            </article>
+            <aside class="metrics-panel" aria-label="Dictation stats">
+              <article><span>Total words</span><strong id="totalWordsSpoken">0</strong><small>Saved dictation volume</small></article>
+              <article><span>Average speed</span><strong id="averageWordsPerMinute">—</strong><small>Words per minute</small></article>
+              <article><span>Average length</span><strong id="averageWordsPerRecording">—</strong><small>Words per recording</small></article>
+            </aside>
           </section>
 
-          <article class="debug-card">
+          <section class="workflow-strip" aria-label="Workflow shortcuts">
+            <button class="workflow-card" data-view="dictionary" type="button"><span>01</span><strong>Words</strong><small>Teach names, products, and corrections.</small></button>
+            <button class="workflow-card" data-view="transforms" type="button"><span>02</span><strong>Polish</strong><small id="polishShortcutHome"><kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></small></button>
+            <button class="workflow-card" data-view="scratchpad" type="button"><span>03</span><strong>Scratchpad</strong><small>Review, reuse, and rewrite transcripts.</small></button>
+          </section>
+
+          <section class="provider-board">
+            <div class="section-heading split-heading">
+              <div><p class="eyebrow">Speech engines</p><h2>Pick the transcription lane</h2></div>
+              <span>Keys stay local</span>
+            </div>
+            <div class="provider-list">
+              <div class="provider-row active" data-provider-row="groq">
+                <button class="provider-option" data-provider="groq" type="button"><strong>Groq</strong><span>Whisper Large v3 Turbo</span><em>Active</em></button>
+                <label class="field compact-field"><span>Groq API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="Groq key stored locally" /></label>
+              </div>
+              <div class="provider-row" data-provider-row="elevenlabs">
+                <button class="provider-option" data-provider="elevenlabs" type="button"><strong>ElevenLabs</strong><span>Scribe v2 speech-to-text</span><em>Make active</em></button>
+                <label class="field compact-field"><span>ElevenLabs API key</span><input id="elevenLabsApiKey" type="password" autocomplete="off" placeholder="ElevenLabs key stored locally" /></label>
+              </div>
+              <div class="provider-row" data-provider-row="sarvam">
+                <button class="provider-option" data-provider="sarvam" type="button"><strong>Sarvam</strong><span>Saaras v3 speech-to-text</span><em>Make active</em></button>
+                <label class="field compact-field"><span>Sarvam API key</span><input id="sarvamApiKey" type="password" autocomplete="off" placeholder="Sarvam key stored locally" /></label>
+              </div>
+              <div class="provider-row" data-provider-row="deepgram">
+                <button class="provider-option" data-provider="deepgram" type="button"><strong>Deepgram</strong><span>Nova-3 · fast live STT</span><em>Make active</em></button>
+                <label class="field compact-field"><span>Deepgram API key</span><input id="deepgramApiKey" type="password" autocomplete="off" placeholder="Deepgram key stored locally" /></label>
+                <label class="field compact-field streaming-toggle"><span>Live streaming</span><small>Paste words directly as you speak</small><input id="deepgramStreaming" type="checkbox" /></label>
+              </div>
+            </div>
+          </section>
+
+          <article class="debug-card diagnostic-panel">
             <div class="provider-card-head">
-              <div><strong>Debug bundle</strong><span>Add what you spoke, then copy all stream logs for fast diagnosis.</span></div>
+              <div><strong>Diagnostic recorder</strong><span>Add expected words, then copy logs when transcription goes weird.</span></div>
               <button id="copyDebugBundle" class="soft-btn" type="button">Copy bundle</button>
             </div>
             <label class="field"><span>Words you spoke / expected text</span><textarea id="debugExpectedWords" rows="3" placeholder="Example: hello this is a streaming test..."></textarea></label>
@@ -226,51 +222,52 @@ app.innerHTML = `
 
 
         <section class="view-panel" data-panel="dictionary">
-          <header class="page-head">
+          <header class="page-head command-head">
             <div>
-              <h1>Words</h1>
-              <p>Add names, product terms, and regular words FlowDesk should spell exactly the way you expect.</p>
+              <span class="page-kicker">Words control</span>
+              <h1>Make transcription spell like you.</h1>
+              <p>Build a local glossary for brand names, products, people, and deterministic fixes before text ever gets pasted.</p>
             </div>
           </header>
 
-          <article class="dictionary-hero">
-            <div>
-              <span class="console-kicker">Whisper glossary</span>
-              <h2>Teach transcription your vocabulary</h2>
-              <p>These words are included in the Whisper prompt for Groq transcriptions. Corrections run after transcription, before paste, so repeated mistakes can be fixed deterministically.</p>
+          <section class="dictionary-lab">
+            <article class="dictionary-hero">
+              <span class="console-kicker">Whisper prompt</span>
+              <h2>Preferred vocabulary</h2>
+              <p>These terms are attached to Groq Whisper requests as spelling context.</p>
               <div id="wordPills" class="word-pills"><span>Dixit</span><span>Ampere</span><span>OpenClaw</span></div>
-            </div>
-          </article>
+            </article>
+
+            <article class="prompt-preview-card">
+              <div class="provider-card-head">
+                <div><strong>Live prompt preview</strong><span>Generated from your preferred words list.</span></div>
+                <button id="copyPromptPreview" class="soft-btn" type="button">Copy prompt</button>
+              </div>
+              <pre id="promptPreview">No words yet.</pre>
+            </article>
+          </section>
 
           <section class="dictionary-grid">
-            <article class="dictionary-editor">
+            <article class="dictionary-editor primary-editor">
               <span>Preferred words</span>
-              <textarea id="vocabularyInput" class="compact-textarea" rows="10" placeholder="One per line or comma separated. Example:
+              <textarea id="vocabularyInput" class="compact-textarea" rows="12" placeholder="One per line or comma separated. Example:
 Dixit
 Ampere
 OpenClaw
 MaxStudio
 ChromaStudio
 Remix AI"></textarea>
-              <small>Used to build the Whisper prompt. Best for brand names, people, product names, and domain words.</small>
+              <small>Best for names, product terms, domain vocabulary, and words that need exact capitalization.</small>
             </article>
-            <article class="dictionary-editor">
+            <article class="dictionary-editor corrections-editor">
               <span>Auto-corrections</span>
-              <textarea id="correctionsInput" class="compact-textarea" rows="10" placeholder="One correction per line. Example:
+              <textarea id="correctionsInput" class="compact-textarea" rows="12" placeholder="One correction per line. Example:
 whisper flow => WisprFlow
 open claw => OpenClaw
 max studio => MaxStudio"></textarea>
-              <small>Runs after transcription and before paste. Use <strong>heard wrong =&gt; correct spelling</strong>.</small>
+              <small>Runs after transcription and before paste/history. Format: <strong>heard wrong =&gt; correct spelling</strong>.</small>
             </article>
           </section>
-
-          <article class="prompt-preview-card">
-            <div class="provider-card-head">
-              <div><strong>Prompt preview</strong><span>This is what gets attached to Groq Whisper requests.</span></div>
-              <button id="copyPromptPreview" class="soft-btn" type="button">Copy prompt</button>
-            </div>
-            <pre id="promptPreview">No words yet.</pre>
-          </article>
         </section>
 
         <section class="view-panel" data-panel="snippets">
@@ -284,13 +281,27 @@ max studio => MaxStudio"></textarea>
         </section>
 
         <section class="view-panel" data-panel="transforms">
-          <header class="page-head"><div><h1>Transforms</h1><p>Convert rough speech into useful formats.</p></div></header>
-          <section class="rewrite-layout"><article class="transform-card"><div class="section-heading"><p class="eyebrow">Rewrite input</p><h2>Clean up rough dictation</h2></div><textarea id="rewriteInput" placeholder="Record something or paste text here..."></textarea><div class="shortcut-hint">Press <kbd>Cmd/Ctrl</kbd> + <kbd>Enter</kbd> to polish writing</div><div class="rewrite-actions"><button data-rewrite="clean" type="button">Clean up</button><button data-rewrite="polish" type="button">Polish writing</button><button data-rewrite="professional" type="button">Professional</button><button data-rewrite="shorter" type="button">Shorter</button><button data-rewrite="friendly" type="button">Friendly</button></div></article><article class="transform-card"><div class="section-heading"><p class="eyebrow">Output</p><h2>Ready text</h2></div><div id="rewriteOutput" class="rewrite-output empty">Your rewritten text will appear here.</div><div class="promo-actions"><button id="copyRewrite" type="button">Copy</button><button id="pasteRewrite" class="primary-btn" type="button"><span class="button-dot"></span>Paste</button></div></article></section>
+          <header class="page-head command-head">
+            <div><span class="page-kicker">Rewrite bench</span><h1>Turn rough speech into usable text.</h1><p>Clean dictation, compress rambling thoughts, or shift tone before copying or pasting back.</p></div>
+          </header>
+          <section class="rewrite-layout workbench-layout">
+            <article class="transform-card input-bench">
+              <div class="section-heading"><p class="eyebrow">Source</p><h2>Raw dictation</h2></div>
+              <textarea id="rewriteInput" placeholder="Record something or paste text here..."></textarea>
+              <div class="shortcut-hint">Press <kbd>Cmd/Ctrl</kbd> + <kbd>Enter</kbd> to polish writing</div>
+              <div class="rewrite-actions"><button data-rewrite="clean" type="button">Clean up</button><button data-rewrite="polish" type="button">Polish writing</button><button data-rewrite="professional" type="button">Professional</button><button data-rewrite="shorter" type="button">Shorter</button><button data-rewrite="friendly" type="button">Friendly</button></div>
+            </article>
+            <article class="transform-card output-bench">
+              <div class="section-heading"><p class="eyebrow">Result</p><h2>Ready to paste</h2></div>
+              <div id="rewriteOutput" class="rewrite-output empty">Your rewritten text will appear here.</div>
+              <div class="promo-actions"><button id="copyRewrite" class="soft-btn" type="button">Copy</button><button id="pasteRewrite" class="primary-btn" type="button"><span class="button-dot"></span>Paste</button></div>
+            </article>
+          </section>
         </section>
 
         <section class="view-panel" data-panel="scratchpad">
-          <header class="page-head scratchpad-head">
-            <div><h1>Scratchpad</h1><p>Recovered dictations, copied text, and rewrite-ready transcripts.</p></div>
+          <header class="page-head scratchpad-head command-head">
+            <div><span class="page-kicker">Transcript memory</span><h1>Every dictation, ready to reuse.</h1><p>Recovered text, rewrite history, speed, duration, and quick actions live here.</p></div>
             <button id="startFromScratchpad" class="primary-btn small" type="button"><span class="button-dot"></span>Record</button>
           </header>
           <article class="scratchpad-panel">
