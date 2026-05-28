@@ -22,8 +22,6 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `index` command */
   export type Index = ExtensionPreferences & {}
-  /** Preferences accessible in the `transcribe-audio` command */
-  export type TranscribeAudio = ExtensionPreferences & {}
   /** Preferences accessible in the `words-glossary` command */
   export type WordsGlossary = ExtensionPreferences & {}
   /** Preferences accessible in the `polish-clipboard` command */
@@ -35,8 +33,6 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `index` command */
   export type Index = {}
-  /** Arguments passed to the `transcribe-audio` command */
-  export type TranscribeAudio = {}
   /** Arguments passed to the `words-glossary` command */
   export type WordsGlossary = {}
   /** Arguments passed to the `polish-clipboard` command */

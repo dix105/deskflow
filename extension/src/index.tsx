@@ -1,93 +1,105 @@
-import { Action, ActionPanel, Icon, List } from "@raycast/api";
-import { getGlossary, getTranscripts } from "./storage";
-import { useEffect, useMemo, useState } from "react";
+import { Action, ActionPanel, Clipboard, Detail, Form, getPreferenceValues, Icon, showToast, Toast } from "@raycast/api";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+import { useState } from "react";
+import { applyCorrections, buildVocabularyPrompt, getGlossary, makeId, saveTranscript } from "./storage";
 
-type CommandItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: Icon;
-  target: string;
-  keywords: string[];
+type Preferences = {
+  groqApiKey?: string;
+  transcriptionModel?: string;
 };
 
-const commands: CommandItem[] = [
-  {
-    id: "transcribe-audio",
-    title: "Transcribe Audio File",
-    subtitle: "Whisper transcription with FlowDesk glossary corrections",
-    icon: Icon.Microphone,
-    target: "raycast://extensions/dix105/flowdesk-raycast/transcribe-audio",
-    keywords: ["dictation", "audio", "whisper", "speech"],
-  },
-  {
-    id: "words-glossary",
-    title: "Words Glossary",
-    subtitle: "Preferred spellings and correction rules",
-    icon: Icon.TextCursor,
-    target: "raycast://extensions/dix105/flowdesk-raycast/words-glossary",
-    keywords: ["words", "glossary", "corrections"],
-  },
-  {
-    id: "polish-clipboard",
-    title: "Polish Clipboard Text",
-    subtitle: "Rewrite copied text into clean FlowDesk output",
-    icon: Icon.Wand,
-    target: "raycast://extensions/dix105/flowdesk-raycast/polish-clipboard",
-    keywords: ["polish", "rewrite", "clipboard"],
-  },
-  {
-    id: "transcript-memory",
-    title: "Transcript Memory",
-    subtitle: "Search and reuse saved dictations",
-    icon: Icon.Clock,
-    target: "raycast://extensions/dix105/flowdesk-raycast/transcript-memory",
-    keywords: ["history", "transcript", "dictation"],
-  },
-];
+type Values = {
+  audio: string[];
+  saveToMemory: boolean;
+};
 
 export default function Command() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [transcriptCount, setTranscriptCount] = useState(0);
-  const [wordCount, setWordCount] = useState(0);
+  const [result, setResult] = useState("");
+  const [source, setSource] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      const [glossary, transcripts] = await Promise.all([getGlossary(), getTranscripts()]);
-      setTranscriptCount(transcripts.length);
-      setWordCount(glossary.preferredWords.split(/[\n,]/).filter((word) => word.trim()).length);
-      setIsLoading(false);
+  async function handleSubmit(values: Values) {
+    const audioPath = values.audio?.[0];
+    if (!audioPath) {
+      await showToast({ style: Toast.Style.Failure, title: "Choose an audio file" });
+      return;
     }
-    load();
-  }, []);
 
-  const displayCommands = useMemo(() => {
-    return commands.map((command) => {
-      if (command.id === "words-glossary") return { ...command, subtitle: `${wordCount} preferred words configured` };
-      if (command.id === "transcript-memory") return { ...command, subtitle: `${transcriptCount} transcripts saved` };
-      return command;
-    });
-  }, [transcriptCount, wordCount]);
+    const { groqApiKey, transcriptionModel } = getPreferenceValues<Preferences>();
+    if (!groqApiKey) {
+      await showToast({ style: Toast.Style.Failure, title: "Add Groq API key in FlowDesk preferences" });
+      return;
+    }
+
+    await showToast({ style: Toast.Style.Animated, title: "FlowDesk is transcribing…" });
+    const glossary = await getGlossary();
+    const rawText = await transcribeWithGroq(
+      groqApiKey,
+      transcriptionModel || "whisper-large-v3-turbo",
+      audioPath,
+      buildVocabularyPrompt(glossary),
+    );
+    const text = applyCorrections(rawText, glossary.corrections);
+    const fileName = basename(audioPath);
+
+    if (values.saveToMemory) {
+      await saveTranscript({ id: makeId(), text, source: fileName, createdAt: new Date().toISOString() });
+    }
+
+    setSource(fileName);
+    setResult(text || "No text returned.");
+    await showToast({ style: Toast.Style.Success, title: "Transcription ready" });
+  }
+
+  if (result) {
+    return (
+      <Detail
+        markdown={`# FlowDesk transcript\n\n**Source:** ${source}\n\n---\n\n${result}`}
+        actions={
+          <ActionPanel>
+            <Action.CopyToClipboard title="Copy Transcript" content={result} />
+            <Action.Paste title="Paste Transcript" content={result} />
+            <Action title="Copy and Transcribe Another" icon={Icon.Clipboard} onAction={async () => { await Clipboard.copy(result); setResult(""); setSource(""); }} />
+            <Action.Open title="Edit Words Glossary" target="raycast://extensions/dix105/flowdesk-raycast/words-glossary" />
+            <Action.Open title="Open Transcript Memory" target="raycast://extensions/dix105/flowdesk-raycast/transcript-memory" />
+          </ActionPanel>
+        }
+      />
+    );
+  }
 
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Search FlowDesk dictation commands…">
-      <List.Section title="FlowDesk">
-        {displayCommands.map((command) => (
-          <List.Item
-            key={command.id}
-            icon={command.icon}
-            title={command.title}
-            subtitle={command.subtitle}
-            keywords={command.keywords}
-            accessories={[{ text: "FlowDesk" }]}
-            actions={
-              <ActionPanel>
-                <Action.Open title="Open Command" target={command.target} />
-              </ActionPanel>
-            }
-          />
-        ))}
-      </List.Section>
-    </List>
+    <Form
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm icon={Icon.Microphone} title="Transcribe" onSubmit={handleSubmit} />
+          <Action.Open title="Edit Words Glossary" target="raycast://extensions/dix105/flowdesk-raycast/words-glossary" />
+          <Action.Open title="Open Transcript Memory" target="raycast://extensions/dix105/flowdesk-raycast/transcript-memory" />
+        </ActionPanel>
+      }
+    >
+      <Form.Description text="FlowDesk for Raycast transcribes audio files with Groq Whisper, then applies your Words Glossary and correction rules. Raycast extensions cannot directly start microphone recording, so choose a recorded audio file here." />
+      <Form.FilePicker id="audio" title="Recording" allowMultipleSelection={false} />
+      <Form.Checkbox id="saveToMemory" title="Memory" label="Save transcript" defaultValue />
+    </Form>
   );
+}
+
+async function transcribeWithGroq(apiKey: string, model: string, audioPath: string, prompt: string) {
+  const bytes = await readFile(audioPath);
+  const form = new FormData();
+  form.append("file", new Blob([bytes]), basename(audioPath));
+  form.append("model", model);
+  form.append("response_format", "json");
+  if (prompt) form.append("prompt", prompt.slice(0, 900));
+
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  if (!response.ok) throw new Error(`Groq transcription error ${response.status}`);
+  const data = (await response.json()) as { text?: string };
+  return data.text?.trim() || "";
 }

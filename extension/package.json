@@ -1,7 +1,7 @@
 {
   "name": "flowdesk-raycast",
   "title": "FlowDesk",
-  "description": "FlowDesk dictation, glossary, polishing, and transcript memory inside Raycast.",
+  "description": "Simple FlowDesk transcription for Raycast: transcribe recordings with glossary corrections.",
   "icon": "icon.png",
   "author": "dix105",
   "license": "MIT",
@@ -22,25 +22,14 @@
   "commands": [
     {
       "name": "index",
-      "title": "Command Center",
-      "description": "Open FlowDesk dictation, glossary, polishing, and transcript commands.",
-      "mode": "view",
-      "keywords": [
-        "flowdesk",
-        "dictation",
-        "transcription"
-      ]
-    },
-    {
-      "name": "transcribe-audio",
-      "title": "Transcribe Audio File",
-      "description": "Transcribe an audio file with Groq Whisper and FlowDesk glossary rules.",
+      "title": "FlowDesk",
+      "description": "Transcribe a recording with Groq Whisper and FlowDesk Words corrections.",
       "mode": "view",
       "keywords": [
         "dictation",
+        "transcription",
         "whisper",
-        "audio",
-        "speech"
+        "recording"
       ]
     },
     {
