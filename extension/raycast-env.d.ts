@@ -9,7 +9,11 @@
 
 type ExtensionPreferences = {
   /** Groq API Key - Used for Whisper transcription and text polish. */
-  "groqApiKey"?: string
+  "groqApiKey"?: string,
+  /** Transcription Model - Groq audio transcription model used by Transcribe Audio File. */
+  "transcriptionModel": "whisper-large-v3-turbo" | "whisper-large-v3" | "distil-whisper-large-v3-en",
+  /** Polish Model - Groq chat model used by Polish Clipboard Text. */
+  "polishModel": "llama-3.1-8b-instant" | "llama-3.3-70b-versatile" | "gemma2-9b-it"
 }
 
 /** Preferences accessible in all the extension's commands */

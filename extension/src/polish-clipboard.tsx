@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 type Preferences = {
   groqApiKey?: string;
+  polishModel?: string;
 };
 
 export default function Command() {
@@ -16,14 +17,14 @@ export default function Command() {
         return;
       }
 
-      const { groqApiKey } = getPreferenceValues<Preferences>();
+      const { groqApiKey, polishModel } = getPreferenceValues<Preferences>();
       if (!groqApiKey) {
         setMarkdown(`## Add Groq API key\n\nFlowDesk needs a Groq API key in Raycast preferences to polish clipboard text.\n\n### Clipboard preview\n\n${input}`);
         return;
       }
 
       try {
-        const result = await polishWithGroq(groqApiKey, input);
+        const result = await polishWithGroq(groqApiKey, polishModel || "llama-3.1-8b-instant", input);
         setMarkdown(result);
       } catch (error) {
         await showToast({ style: Toast.Style.Failure, title: "Polish failed", message: String(error) });
@@ -46,7 +47,7 @@ export default function Command() {
   );
 }
 
-async function polishWithGroq(apiKey: string, input: string) {
+async function polishWithGroq(apiKey: string, model: string, input: string) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -54,7 +55,7 @@ async function polishWithGroq(apiKey: string, input: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.1-8b-instant",
+      model,
       messages: [
         { role: "system", content: "Rewrite dictated text clearly. Preserve meaning. Return only the polished text." },
         { role: "user", content: input },

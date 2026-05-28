@@ -5,44 +5,77 @@
   "icon": "icon.png",
   "author": "dix105",
   "license": "MIT",
-  "platforms": ["macOS", "Windows"],
-  "categories": ["Productivity"],
-  "keywords": ["dictation", "speech", "transcription", "whisper", "flowdesk"],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "keywords": [
+    "dictation",
+    "speech",
+    "transcription",
+    "whisper",
+    "flowdesk"
+  ],
   "commands": [
     {
       "name": "index",
       "title": "Command Center",
       "description": "Open FlowDesk dictation, glossary, polishing, and transcript commands.",
       "mode": "view",
-      "keywords": ["flowdesk", "dictation", "transcription"]
+      "keywords": [
+        "flowdesk",
+        "dictation",
+        "transcription"
+      ]
     },
     {
       "name": "transcribe-audio",
       "title": "Transcribe Audio File",
       "description": "Transcribe an audio file with Groq Whisper and FlowDesk glossary rules.",
       "mode": "view",
-      "keywords": ["dictation", "whisper", "audio", "speech"]
+      "keywords": [
+        "dictation",
+        "whisper",
+        "audio",
+        "speech"
+      ]
     },
     {
       "name": "words-glossary",
       "title": "Words Glossary",
       "description": "Manage preferred words and correction rules for FlowDesk transcription.",
       "mode": "view",
-      "keywords": ["words", "glossary", "corrections", "vocabulary"]
+      "keywords": [
+        "words",
+        "glossary",
+        "corrections",
+        "vocabulary"
+      ]
     },
     {
       "name": "polish-clipboard",
       "title": "Polish Clipboard Text",
       "description": "Polish clipboard text using FlowDesk rewrite behavior.",
       "mode": "view",
-      "keywords": ["rewrite", "polish", "clipboard"]
+      "keywords": [
+        "rewrite",
+        "polish",
+        "clipboard"
+      ]
     },
     {
       "name": "transcript-memory",
       "title": "Transcript Memory",
       "description": "Search and reuse FlowDesk dictation transcripts.",
       "mode": "view",
-      "keywords": ["history", "dictation", "transcript"]
+      "keywords": [
+        "history",
+        "dictation",
+        "transcript"
+      ]
     }
   ],
   "preferences": [
@@ -53,6 +86,50 @@
       "type": "password",
       "required": false,
       "placeholder": "gsk_..."
+    },
+    {
+      "name": "transcriptionModel",
+      "title": "Transcription Model",
+      "description": "Groq audio transcription model used by Transcribe Audio File.",
+      "type": "dropdown",
+      "required": true,
+      "default": "whisper-large-v3-turbo",
+      "data": [
+        {
+          "title": "Whisper Large v3 Turbo",
+          "value": "whisper-large-v3-turbo"
+        },
+        {
+          "title": "Whisper Large v3",
+          "value": "whisper-large-v3"
+        },
+        {
+          "title": "Distil Whisper Large v3 EN",
+          "value": "distil-whisper-large-v3-en"
+        }
+      ]
+    },
+    {
+      "name": "polishModel",
+      "title": "Polish Model",
+      "description": "Groq chat model used by Polish Clipboard Text.",
+      "type": "dropdown",
+      "required": true,
+      "default": "llama-3.1-8b-instant",
+      "data": [
+        {
+          "title": "Llama 3.1 8B Instant",
+          "value": "llama-3.1-8b-instant"
+        },
+        {
+          "title": "Llama 3.3 70B Versatile",
+          "value": "llama-3.3-70b-versatile"
+        },
+        {
+          "title": "Gemma 2 9B IT",
+          "value": "gemma2-9b-it"
+        }
+      ]
     }
   ],
   "scripts": {

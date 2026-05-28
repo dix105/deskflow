@@ -6,6 +6,7 @@ import { applyCorrections, buildVocabularyPrompt, getGlossary, makeId, saveTrans
 
 type Preferences = {
   groqApiKey?: string;
+  transcriptionModel?: string;
 };
 
 type Values = {
@@ -23,7 +24,7 @@ export default function Command() {
       return;
     }
 
-    const { groqApiKey } = getPreferenceValues<Preferences>();
+    const { groqApiKey, transcriptionModel } = getPreferenceValues<Preferences>();
     if (!groqApiKey) {
       await showToast({ style: Toast.Style.Failure, title: "Add Groq API key in preferences" });
       return;
@@ -31,7 +32,7 @@ export default function Command() {
 
     await showToast({ style: Toast.Style.Animated, title: "Transcribing audio…" });
     const glossary = await getGlossary();
-    const rawText = await transcribeWithGroq(groqApiKey, audioPath, buildVocabularyPrompt(glossary));
+    const rawText = await transcribeWithGroq(groqApiKey, transcriptionModel || "whisper-large-v3-turbo", audioPath, buildVocabularyPrompt(glossary));
     const text = applyCorrections(rawText, glossary.corrections);
 
     if (values.saveToMemory) {
@@ -72,11 +73,11 @@ export default function Command() {
   );
 }
 
-async function transcribeWithGroq(apiKey: string, audioPath: string, prompt: string) {
+async function transcribeWithGroq(apiKey: string, model: string, audioPath: string, prompt: string) {
   const bytes = await readFile(audioPath);
   const form = new FormData();
   form.append("file", new Blob([bytes]), basename(audioPath));
-  form.append("model", "whisper-large-v3-turbo");
+  form.append("model", model);
   form.append("response_format", "json");
   if (prompt) form.append("prompt", prompt.slice(0, 900));
 
