@@ -1415,7 +1415,7 @@ async function startVoiceCommands() {
   await setupPushToTalkListeners();
   await invoke('start_windows_command_listener', { commands: voiceCommandPhrases() });
   addDebugEvent('voice_commands_started', { commands: voiceCommandPhrases().length });
-  setStatus('success', 'Always-on app commands enabled. Say “open Notion”, “open Telegram”, or “open Discord”.');
+  setStatus('success', 'Always-on app commands enabled. Exact commands are instant; GPT-OSS can resolve custom app/site names.');
 }
 
 async function stopVoiceCommands() {

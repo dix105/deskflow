@@ -1440,30 +1440,146 @@ fn paste_transcript(text: String) -> Result<(), String> {
 #[tauri::command]
 fn open_voice_target(target: String) -> Result<(), String> {
     let target = normalize_voice_target(&target);
-    let destinations: &[&str] = match target.as_str() {
-        "notion" => &["notion://www.notion.so", "https://www.notion.so"],
-        "telegram" => &["tg://", "https://web.telegram.org"],
-        "discord" => &["discord://", "https://discord.com/app"],
-        "x" | "twitter" => &["https://x.com"],
-        "whatsapp" => &["whatsapp://", "https://web.whatsapp.com"],
-        "chrome" => &["https://www.google.com"],
-        "gmail" => &["https://mail.google.com"],
-        "calendar" => &["https://calendar.google.com"],
-        "github" => &["https://github.com"],
-        "word" => &["winword", "https://www.office.com/launch/word"],
-        "excel" => &["excel", "https://www.office.com/launch/excel"],
-        "powerpoint" => &["powerpnt", "https://www.office.com/launch/powerpoint"],
-        "vscode" => &["code", "https://vscode.dev"],
-        _ => return Err(format!("Unknown voice target: {target}")),
-    };
+    if open_installed_app(&target).is_ok() {
+        return Ok(());
+    }
+
+    let destinations = web_fallbacks_for_target(&target);
+    if destinations.is_empty() {
+        return Err(format!("I could not find an installed app or web fallback for {target}"));
+    }
+
     let mut last_error = String::new();
-    for destination in destinations {
+    for destination in &destinations {
         match open_destination(destination) {
             Ok(()) => return Ok(()),
             Err(error) => last_error = error,
         }
     }
     Err(if last_error.is_empty() { format!("Could not open {target}") } else { last_error })
+}
+
+fn web_fallbacks_for_target(target: &str) -> Vec<String> {
+    match target {
+        "notion" => vec!["https://www.notion.so".into()],
+        "telegram" => vec!["https://web.telegram.org".into()],
+        "discord" => vec!["https://discord.com/app".into()],
+        "x" | "twitter" => vec!["https://x.com".into()],
+        "whatsapp" => vec!["https://web.whatsapp.com".into()],
+        "chrome" => vec!["https://www.google.com".into()],
+        "gmail" => vec!["https://mail.google.com".into()],
+        "calendar" => vec!["https://calendar.google.com".into()],
+        "github" => vec!["https://github.com".into()],
+        "word" => vec!["https://www.office.com/launch/word".into()],
+        "excel" => vec!["https://www.office.com/launch/excel".into()],
+        "powerpoint" => vec!["https://www.office.com/launch/powerpoint".into()],
+        "vscode" => vec!["https://vscode.dev".into()],
+        other if looks_like_domain(other) => vec![format!("https://{}", other)],
+        _ => Vec::new(),
+    }
+}
+
+fn looks_like_domain(value: &str) -> bool {
+    value.contains('.') && !value.contains(' ') && !value.contains('/')
+}
+
+fn open_installed_app(target: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        if let Some(command) = command_alias_for_target(target) {
+            if open_destination(command).is_ok() {
+                return Ok(());
+            }
+        }
+        if let Some(shortcut) = find_start_menu_shortcut(target) {
+            return open_destination(&shortcut.to_string_lossy());
+        }
+        Err(format!("No installed app found for {target}"))
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        Err("Installed app discovery is only implemented on Windows right now".into())
+    }
+}
+
+#[cfg(windows)]
+fn command_alias_for_target(target: &str) -> Option<&'static str> {
+    match target {
+        "notion" => Some("notion://www.notion.so"),
+        "telegram" => Some("tg://"),
+        "discord" => Some("discord://"),
+        "whatsapp" => Some("whatsapp://"),
+        "word" => Some("winword"),
+        "excel" => Some("excel"),
+        "powerpoint" => Some("powerpnt"),
+        "vscode" => Some("code"),
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
+fn find_start_menu_shortcut(target: &str) -> Option<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(program_data) = std::env::var("PROGRAMDATA") {
+        roots.push(PathBuf::from(program_data).join("Microsoft\\Windows\\Start Menu\\Programs"));
+    }
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        roots.push(PathBuf::from(app_data).join("Microsoft\\Windows\\Start Menu\\Programs"));
+    }
+
+    for root in roots {
+        if let Some(path) = find_shortcut_in_dir(&root, target, 0) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn find_shortcut_in_dir(dir: &PathBuf, target: &str, depth: usize) -> Option<PathBuf> {
+    if depth > 4 || !dir.exists() {
+        return None;
+    }
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_shortcut_in_dir(&path, target, depth + 1) {
+                return Some(found);
+            }
+            continue;
+        }
+        if path.extension().and_then(|ext| ext.to_str()).map(|ext| ext.eq_ignore_ascii_case("lnk")).unwrap_or(false) {
+            let name = path.file_stem().and_then(|name| name.to_str()).unwrap_or_default();
+            if shortcut_matches_target(name, target) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn shortcut_matches_target(name: &str, target: &str) -> bool {
+    let normalized_name = normalize_search_text(name);
+    let normalized_target = normalize_search_text(target);
+    !normalized_target.is_empty()
+        && (normalized_name == normalized_target
+            || normalized_name.contains(&normalized_target)
+            || normalized_target.contains(&normalized_name))
+}
+
+#[cfg(windows)]
+fn normalize_search_text(value: &str) -> String {
+    value
+        .to_lowercase()
+        .replace("microsoft", "")
+        .replace("desktop", "")
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
 }
 
 #[tauri::command]
@@ -1510,7 +1626,7 @@ async fn classify_voice_command(api_key: String, text: String) -> Result<VoiceCo
         return Err("No voice command text to classify".into());
     }
 
-    let targets = "notion, telegram, discord, x, twitter, whatsapp, chrome, gmail, calendar, github, word, excel, powerpoint, vscode";
+    let targets = "notion, telegram, discord, x, twitter, whatsapp, chrome, gmail, calendar, github, word, excel, powerpoint, vscode, or a short app/site name such as slack, linear, figma, cursor, claude, youtube, agentplace.sh";
     let body = serde_json::json!({
         "model": "gpt-oss-120b",
         "temperature": 0,
@@ -1518,7 +1634,7 @@ async fn classify_voice_command(api_key: String, text: String) -> Result<VoiceCo
         "messages": [
             {
                 "role": "system",
-                "content": format!("You classify always-on desktop voice commands. Return ONLY compact JSON with keys action,target,confidence,reason. action must be open, close, or none. target must be one of: {targets}; use x for Twitter/X. If the user is not clearly asking to open or close one of those targets, action none and target empty. Be conservative because this controls the user's computer.")
+                "content": format!("You classify always-on desktop voice commands. Return ONLY compact JSON with keys action,target,confidence,reason. action must be open, close, or none. target should be a short normalized app/site name. Prefer known targets: {targets}. Use x for Twitter/X, vscode for VS Code, word for Microsoft Word. For websites, return a bare domain like agentplace.sh if clearly requested. If the user is not clearly asking to open or close an app/site, action none and target empty. Be conservative because this controls the user's computer.")
             },
             { "role": "user", "content": input }
         ]

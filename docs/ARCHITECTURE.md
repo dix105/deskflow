@@ -61,3 +61,11 @@
 - After a valid command decision, the frontend calls `sarvam_text_to_speech`, plays “I will <action> <target>.”, then executes directly.
 - `sarvam_text_to_speech` uses Sarvam Bulbul v3 via `https://api.sarvam.ai/text-to-speech` and returns base64 WAV audio.
 - Web-capable targets have fallbacks. Examples: WhatsApp falls back to `https://web.whatsapp.com`, Discord to `https://discord.com/app`, Telegram to `https://web.telegram.org`, VS Code to `https://vscode.dev`, and Office apps to Office web launch URLs.
+
+### Dynamic app/site resolver
+
+- `open_voice_target` now tries installed app discovery before web fallback.
+- On Windows it checks command/protocol aliases first, then recursively scans Start Menu shortcut folders under ProgramData and AppData.
+- If no installed app is found, it uses a small fallback catalog for common web-capable apps.
+- If GPT-OSS returns a clear bare domain target, the resolver can open it as `https://<domain>` without adding a hardcoded entry.
+- This keeps the manual list small: aliases/fallbacks are seeds, while installed app shortcuts and GPT target names cover the long tail.
