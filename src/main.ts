@@ -1384,7 +1384,7 @@ async function setupPushToTalkListeners() {
   });
 }
 
-const voiceCommandTargets = ['notion', 'telegram', 'discord', 'x', 'twitter', 'whatsapp', 'gmail', 'calendar', 'github', 'chrome'] as const;
+const voiceCommandTargets = ['notion', 'telegram', 'discord', 'x', 'twitter', 'whatsapp', 'gmail', 'calendar', 'github', 'chrome', 'word', 'microsoft word', 'excel', 'powerpoint', 'vscode', 'vs code'] as const;
 
 function voiceCommandPhrases() {
   return voiceCommandTargets.flatMap((target) => [
@@ -1438,7 +1438,7 @@ async function handleVoiceCommand(payload: string) {
 function parseVoiceCommandDecision(phrase: string): VoiceCommandDecision {
   const normalized = phrase.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
   for (const target of voiceCommandTargets) {
-    const normalizedTarget = target === 'twitter' ? 'x' : target;
+    const normalizedTarget = normalizeVoiceCommandTarget(target);
     if (normalized === `open ${target}` || normalized === `${target} open` || normalized === `launch ${target}` || normalized === `start ${target}`) {
       return { action: 'open', target: normalizedTarget, confidence: 1, reason: 'exact grammar match' };
     }
@@ -1469,7 +1469,16 @@ function providerFriendlyTarget(target: string) {
   if (target === 'x') return 'X';
   if (target === 'gmail') return 'Gmail';
   if (target === 'github') return 'GitHub';
+  if (target === 'vscode') return 'VS Code';
+  if (target === 'word') return 'Word';
   return target.charAt(0).toUpperCase() + target.slice(1);
+}
+
+function normalizeVoiceCommandTarget(target: string) {
+  if (target === 'twitter') return 'x';
+  if (target === 'microsoft word') return 'word';
+  if (target === 'vs code') return 'vscode';
+  return target;
 }
 
 async function startVoiceTrigger() {

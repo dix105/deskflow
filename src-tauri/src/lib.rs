@@ -1391,7 +1391,7 @@ fn paste_transcript(text: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_voice_target(target: String) -> Result<(), String> {
-    let target = target.trim().to_lowercase();
+    let target = normalize_voice_target(&target);
     let destination = match target.as_str() {
         "notion" => "notion://www.notion.so",
         "telegram" => "tg://",
@@ -1402,6 +1402,10 @@ fn open_voice_target(target: String) -> Result<(), String> {
         "gmail" => "https://mail.google.com",
         "calendar" => "https://calendar.google.com",
         "github" => "https://github.com",
+        "word" => "winword",
+        "excel" => "excel",
+        "powerpoint" => "powerpnt",
+        "vscode" => "code",
         _ => return Err(format!("Unknown voice target: {target}")),
     };
     open_destination(destination)
@@ -1418,11 +1422,17 @@ fn close_voice_target(target: String) -> Result<(), String> {
             "discord" => &["Discord.exe", "DiscordCanary.exe", "DiscordPTB.exe"],
             "whatsapp" => &["WhatsApp.exe"],
             "chrome" => &["chrome.exe"],
+            "word" => &["WINWORD.EXE"],
+            "excel" => &["EXCEL.EXE"],
+            "powerpoint" => &["POWERPNT.EXE"],
+            "vscode" => &["Code.exe"],
             _ => return Err(format!("Closing {target} is not mapped yet")),
         };
         for process in processes {
             let _ = std::process::Command::new("taskkill")
                 .args(["/IM", process, "/T", "/F"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .status();
         }
         return Ok(());
@@ -1445,7 +1455,7 @@ async fn classify_voice_command(api_key: String, text: String) -> Result<VoiceCo
         return Err("No voice command text to classify".into());
     }
 
-    let targets = "notion, telegram, discord, x, twitter, whatsapp, chrome, gmail, calendar, github";
+    let targets = "notion, telegram, discord, x, twitter, whatsapp, chrome, gmail, calendar, github, word, excel, powerpoint, vscode";
     let body = serde_json::json!({
         "model": "gpt-oss-120b",
         "temperature": 0,
@@ -1501,6 +1511,10 @@ async fn classify_voice_command(api_key: String, text: String) -> Result<VoiceCo
 fn normalize_voice_target(target: &str) -> String {
     match target.trim().to_lowercase().as_str() {
         "twitter" => "x".into(),
+        "microsoft word" | "ms word" => "word".into(),
+        "microsoft excel" | "ms excel" => "excel".into(),
+        "microsoft powerpoint" | "power point" | "ms powerpoint" => "powerpoint".into(),
+        "vs code" | "visual studio code" => "vscode".into(),
         other => other.to_string(),
     }
 }
