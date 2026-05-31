@@ -143,6 +143,8 @@ let pasteRewriteInFlight = false;
 let warmMicStream: MediaStream | null = null;
 let warmMicPromise: Promise<MediaStream> | null = null;
 const isTauriRuntime = '__TAURI_INTERNALS__' in window;
+const desktopPlatform = navigator.userAgent.toLowerCase();
+const isWindowsDesktop = desktopPlatform.includes('windows');
 const numberFormatter = new Intl.NumberFormat();
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -1413,6 +1415,14 @@ async function startVoiceCommands() {
     setStatus('idle', 'Always-on voice commands run inside the desktop app.');
     return;
   }
+  if (!isWindowsDesktop) {
+    voiceCommandsEnabled = false;
+    voiceCommandsInput.checked = false;
+    localStorage.setItem(VOICE_COMMANDS_KEY, 'false');
+    setStatus('idle', 'Always-on voice commands are Windows-only right now. Mac dictation shortcuts still work.');
+    addDebugEvent('voice_commands_skipped_non_windows');
+    return;
+  }
   await setupPushToTalkListeners();
   await invoke('start_windows_command_listener', { commands: voiceCommandPhrases() });
   startVoiceCommandWatchdog();
@@ -1423,6 +1433,11 @@ async function startVoiceCommands() {
 async function stopVoiceCommands() {
   if (!isTauriRuntime) return;
   stopVoiceCommandWatchdog();
+  if (!isWindowsDesktop) {
+    addDebugEvent('voice_commands_stop_skipped_non_windows');
+    setStatus('idle', 'Always-on app commands disabled.');
+    return;
+  }
   await invoke('stop_windows_command_listener');
   addDebugEvent('voice_commands_stopped');
   setStatus('idle', 'Always-on app commands disabled.');
@@ -1440,7 +1455,7 @@ function stopVoiceCommandWatchdog() {
 }
 
 async function checkVoiceCommandListenerHealth() {
-  if (!voiceCommandsEnabled || !isTauriRuntime) return;
+  if (!voiceCommandsEnabled || !isTauriRuntime || !isWindowsDesktop) return;
   try {
     const running = await invoke<boolean>('is_windows_command_listener_running');
     if (running) return;
@@ -1538,6 +1553,14 @@ function normalizeVoiceCommandTarget(target: string) {
 async function startVoiceTrigger() {
   if (!isTauriRuntime) {
     setStatus('idle', 'Voice trigger runs inside the desktop app.');
+    return;
+  }
+  if (!isWindowsDesktop) {
+    voiceTriggerEnabled = false;
+    voiceTriggerInput.checked = false;
+    localStorage.setItem(VOICE_TRIGGER_KEY, 'false');
+    setStatus('idle', 'Voice trigger is Windows-only right now. Use the Mac shortcut to dictate.');
+    addDebugEvent('voice_trigger_skipped_non_windows');
     return;
   }
   await setupPushToTalkListeners();
@@ -1786,7 +1809,7 @@ function requestStopRecording(reason: string) {
 }
 
 function shouldUseNativeMic() {
-  return isTauriRuntime && nativeMicEnabled && !isStreamingActive() && !recordingStartedByVoiceTrigger;
+  return isTauriRuntime && isWindowsDesktop && nativeMicEnabled && !isStreamingActive() && !recordingStartedByVoiceTrigger;
 }
 
 async function finishNativeRecording(reason: string) {
