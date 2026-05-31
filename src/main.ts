@@ -1474,6 +1474,9 @@ async function startBrowserVoiceCommands() {
     return;
   }
 
+  const micAllowed = await requestAlwaysOnMicPermission();
+  if (!micAllowed) return;
+
   stopBrowserVoiceCommands();
   await setupPushToTalkListeners();
 
@@ -1525,6 +1528,29 @@ async function startBrowserVoiceCommands() {
   } catch (error) {
     browserVoiceRecognition = null;
     setStatus('error', `Could not start Mac always-on voice commands: ${String(error)}`);
+  }
+}
+
+async function requestAlwaysOnMicPermission() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('error', 'Microphone permission popup is not available in this WebView.');
+    addDebugEvent('browser_voice_commands_get_user_media_unavailable');
+    return false;
+  }
+
+  try {
+    setStatus('working', 'Requesting microphone permission…');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    addDebugEvent('browser_voice_commands_mic_permission_granted');
+    return true;
+  } catch (error) {
+    voiceCommandsEnabled = false;
+    voiceCommandsInput.checked = false;
+    localStorage.setItem(VOICE_COMMANDS_KEY, 'false');
+    setStatus('error', 'Microphone permission was not granted. macOS should show a popup; if it does not, enable FlowDesk in System Settings → Privacy & Security → Microphone.');
+    addDebugEvent('browser_voice_commands_mic_permission_denied', String(error));
+    return false;
   }
 }
 
