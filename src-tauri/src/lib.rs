@@ -538,7 +538,12 @@ $dictationGrammar.Name = 'FlowDesk open-ended commands'
 $recognizer.LoadGrammar($dictationGrammar)
 $recognizer.SetInputToDefaultAudioDevice()
 Register-ObjectEvent -InputObject $recognizer -EventName SpeechRecognized -Action {
-  if ($EventArgs.Result.Confidence -ge 0.50) {
+  $text = $EventArgs.Result.Text
+  $confidence = $EventArgs.Result.Confidence
+  $grammarName = $EventArgs.Result.Grammar.Name
+  $isExact = $grammarName -eq 'FlowDesk exact commands'
+  $looksLikeCommand = $text -match '(?i)\b(open|launch|start|close|quit|stop)\b'
+  if (($isExact -and $confidence -ge 0.50) -or ($looksLikeCommand -and $confidence -ge 0.65)) {
     [Console]::Out.WriteLine(('FLOWDESK_COMMAND:' + $EventArgs.Result.Text + '|' + $EventArgs.Result.Confidence))
     [Console]::Out.Flush()
   }

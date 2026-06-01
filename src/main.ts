@@ -128,6 +128,7 @@ let pendingStreamingChunks: Blob[] = [];
 let streamingSendPromises: Promise<void>[] = [];
 let streamingSocketOpened = false;
 let streamingSocketFailed = false;
+let recentVoiceCommandPhrases: { time: string; phrase: string; confidence: string; decision?: VoiceCommandDecision }[] = [];
 let streamingPastedLive = false;
 let debugEvents: { time: string; label: string; data?: unknown }[] = [];
 let pushToTalkListenersReady = false;
@@ -1022,6 +1023,7 @@ function buildDebugBundle() {
     streamingSocketState: streamingSocket?.readyState ?? null,
     micPeakLevel: Number(waveformPeakLevel.toFixed(4)),
     chunksBuffered: chunks.map((chunk) => chunk instanceof Blob ? { size: chunk.size, type: chunk.type } : String(chunk)),
+    recentVoiceCommandPhrases,
     events: debugEvents,
   }, null, 2);
 }
@@ -1661,6 +1663,9 @@ function recordNextBrowserVoiceCommandSegment() {
 async function handleVoiceCommand(payload: string) {
   const [phrase, confidence = ''] = payload.split('|');
   let decision = parseVoiceCommandDecision(phrase || '');
+  recentVoiceCommandPhrases.push({ time: new Date().toISOString(), phrase: phrase || '', confidence, decision });
+  recentVoiceCommandPhrases = recentVoiceCommandPhrases.slice(-50);
+  addDebugEvent('voice_command_heard', { phrase, confidence });
   addDebugEvent('voice_command_detected', { phrase, confidence, decision });
   if (aiVoiceCommandsEnabled && shouldUseAiVoiceCommandFallback(phrase || '', decision)) {
     const aiDecision = await classifyVoiceCommandWithCerebras(phrase || '');
@@ -1697,13 +1702,21 @@ async function speakCommandClarification() {
   setStatus('idle', message);
   const key = sarvamApiKeyInput.value.trim();
   if (!key || !isTauriRuntime) {
+    addDebugEvent('sarvam_clarification_tts_skipped', { reason: key ? 'not tauri runtime' : 'missing Sarvam key' });
     speakWithBrowserFemaleVoice(message);
     return;
   }
   try {
+    addDebugEvent('sarvam_clarification_tts_start', { speaker: 'anushka' });
     const base64Audio = await invoke<string>('sarvam_text_to_speech', { apiKey: key, text: message });
     const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+    audio.addEventListener('ended', () => addDebugEvent('sarvam_clarification_tts_ended'));
+    audio.addEventListener('error', () => {
+      addDebugEvent('sarvam_clarification_audio_error');
+      speakWithBrowserFemaleVoice(message);
+    });
     await audio.play();
+    addDebugEvent('sarvam_clarification_tts_playing');
   } catch (error) {
     addDebugEvent('sarvam_clarification_tts_failed', String(error));
     speakWithBrowserFemaleVoice(message);
@@ -1718,11 +1731,17 @@ function speakWithBrowserFemaleVoice(text: string) {
     utterance.rate = 0.95;
     utterance.pitch = 1.12;
     const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) {
+      window.speechSynthesis.onvoiceschanged = () => speakWithBrowserFemaleVoice(text);
+      addDebugEvent('browser_clarification_tts_waiting_for_voices');
+      return;
+    }
     const femaleVoice = voices.find((voice) => /female|zira|susan|samantha|anushka|veena|heera|kajal|neural/i.test(`${voice.name} ${voice.voiceURI}`))
       || voices.find((voice) => /en-IN|en_US|en-GB|en-US/i.test(voice.lang));
     if (femaleVoice) utterance.voice = femaleVoice;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+    addDebugEvent('browser_clarification_tts_speaking', { voice: utterance.voice?.name || 'default' });
   } catch (error) {
     addDebugEvent('browser_clarification_tts_failed', String(error));
   }
