@@ -1696,13 +1696,35 @@ async function speakCommandClarification() {
   const message = 'Can you please clarify?';
   setStatus('idle', message);
   const key = sarvamApiKeyInput.value.trim();
-  if (!key || !isTauriRuntime) return;
+  if (!key || !isTauriRuntime) {
+    speakWithBrowserFemaleVoice(message);
+    return;
+  }
   try {
     const base64Audio = await invoke<string>('sarvam_text_to_speech', { apiKey: key, text: message });
     const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
     await audio.play();
   } catch (error) {
     addDebugEvent('sarvam_clarification_tts_failed', String(error));
+    speakWithBrowserFemaleVoice(message);
+  }
+}
+
+function speakWithBrowserFemaleVoice(text: string) {
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-IN';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.12;
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find((voice) => /female|zira|susan|samantha|anushka|veena|heera|kajal|neural/i.test(`${voice.name} ${voice.voiceURI}`))
+      || voices.find((voice) => /en-IN|en_US|en-GB|en-US/i.test(voice.lang));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    addDebugEvent('browser_clarification_tts_failed', String(error));
   }
 }
 

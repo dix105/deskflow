@@ -1612,10 +1612,10 @@ fn macos_app_name_for_target(target: &str) -> Option<&'static str> {
 #[cfg(windows)]
 fn command_alias_for_target(target: &str) -> Option<&'static str> {
     match target {
-        "notion" => Some("notion://www.notion.so"),
-        "telegram" => Some("tg://"),
-        "discord" => Some("discord://"),
-        "whatsapp" => Some("whatsapp://"),
+        // Avoid custom URL protocols here. On Windows `cmd /C start` can exit
+        // successfully even when no app handled the protocol, which prevents
+        // the website fallback from running. Start-menu shortcuts are checked
+        // next for installed apps; websites remain the reliable fallback.
         "browser" => Some("https://www.google.com"),
         "word" => Some("winword"),
         "excel" => Some("excel"),
