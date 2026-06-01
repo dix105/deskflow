@@ -1647,7 +1647,10 @@ async function handleVoiceCommand(payload: string) {
   const [phrase, confidence = ''] = payload.split('|');
   let decision = parseVoiceCommandDecision(phrase || '');
   addDebugEvent('voice_command_detected', { phrase, confidence, decision });
-  if (decision.action === 'none' || !decision.target) return;
+  if (decision.action === 'none' || !decision.target) {
+    if (shouldAskForCommandClarification(phrase || '')) await speakCommandClarification();
+    return;
+  }
   await executeVoiceCommandDecision(decision, confidence);
 }
 
@@ -1658,11 +1661,38 @@ async function executeVoiceCommandDecision(decision: VoiceCommandDecision, confi
     setStatus('success', `${decision.action === 'open' ? 'Opened' : 'Closed'} ${providerFriendlyTarget(decision.target)}${confidence ? ` · confidence ${confidence}` : ''}.`);
   } catch (error) {
     addDebugEvent('voice_command_open_or_close_failed', { decision, error: String(error) });
+    await speakCommandClarification();
+  }
+}
+
+function shouldAskForCommandClarification(phrase: string) {
+  const normalized = phrase.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized || normalized.length < 5) return false;
+  if (/^(thank you|thanks|see you|i'm sorry|sorry|okay|ok|yes|no|cancel|confirm)\b/.test(normalized)) return false;
+  return /\b(open|launch|start|close|quit|stop)\b/.test(normalized);
+}
+
+async function speakCommandClarification() {
+  const message = 'Can you please clarify?';
+  setStatus('idle', message);
+  const key = sarvamApiKeyInput.value.trim();
+  if (!key || !isTauriRuntime) return;
+  try {
+    const base64Audio = await invoke<string>('sarvam_text_to_speech', { apiKey: key, text: message });
+    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+    await audio.play();
+  } catch (error) {
+    addDebugEvent('sarvam_clarification_tts_failed', String(error));
   }
 }
 
 function parseVoiceCommandDecision(phrase: string): VoiceCommandDecision {
-  const normalized = phrase.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = phrase
+    .toLowerCase()
+    .replace(/[.,!?]/g, ' ')
+    .replace(/\b(please|can you|could you|would you)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const commandMatch = normalized.match(/^(open|launch|start|close|quit|stop)\s+(.+)$/) || normalized.match(/^(.+)\s+(open|close|quit|stop)$/);
   if (commandMatch) {
     const actionWord = ['open', 'launch', 'start', 'close', 'quit', 'stop'].includes(commandMatch[1]) ? commandMatch[1] : commandMatch[2];

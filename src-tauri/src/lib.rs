@@ -916,7 +916,7 @@ async fn sarvam_text_to_speech(api_key: String, text: String) -> Result<String, 
     let body = serde_json::json!({
         "text": text,
         "target_language_code": "en-IN",
-        "speaker": "shubh",
+        "speaker": "anushka",
         "model": "bulbul:v3"
     });
 
