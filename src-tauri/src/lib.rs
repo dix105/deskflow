@@ -577,7 +577,6 @@ while ($true) { Start-Sleep -Milliseconds 250 }
 
     let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
-        .env("FLOWDESK_COMMANDS", commands.join("\n"))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
