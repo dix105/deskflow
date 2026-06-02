@@ -2013,7 +2013,7 @@ async fn classify_voice_command(api_key: String, text: String, targets: Vec<Voic
         .collect();
 
     let body = serde_json::json!({
-        "model": "llama3.1-8b",
+        "model": "gpt-oss-120b",
         "temperature": 0,
         "max_tokens": 140,
         "messages": [
