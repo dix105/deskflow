@@ -103,6 +103,23 @@ type MeetingRecord = {
   transcript: string;
 };
 
+const DEFAULT_COMMAND_TARGETS: CommandTarget[] = [
+  { id: 'notion', label: 'Notion', aliases: ['notes', 'my notes', 'notion app', 'motion', 'ocean', 'potion'], kind: 'url', openValue: 'https://www.notion.so', closeProcesses: ['Notion.exe'], enabled: true },
+  { id: 'telegram', label: 'Telegram', aliases: ['tg', 'chat app', 'telegram app', 'telegraph'], kind: 'url', openValue: 'https://web.telegram.org', closeProcesses: ['Telegram.exe'], enabled: true },
+  { id: 'discord', label: 'Discord', aliases: ['chat', 'discord app', 'community'], kind: 'url', openValue: 'https://discord.com/app', closeProcesses: ['Discord.exe', 'DiscordCanary.exe', 'DiscordPTB.exe'], enabled: true },
+  { id: 'x', label: 'X', aliases: ['twitter', 'x dot com'], kind: 'url', openValue: 'https://x.com', closeProcesses: [], enabled: true },
+  { id: 'whatsapp', label: 'WhatsApp', aliases: ['whatsapp web', 'whatsap', 'whatsappa'], kind: 'url', openValue: 'https://web.whatsapp.com', closeProcesses: ['WhatsApp.exe'], enabled: true },
+  { id: 'gmail', label: 'Gmail', aliases: ['mail', 'google mail', 'email'], kind: 'url', openValue: 'https://mail.google.com', closeProcesses: [], enabled: true },
+  { id: 'github', label: 'GitHub', aliases: ['git hub', 'gitup'], kind: 'url', openValue: 'https://github.com', closeProcesses: [], enabled: true },
+  { id: 'chrome', label: 'Chrome', aliases: ['browser', 'internet', 'web', 'google chrome', 'crom', 'grown'], kind: 'app', openValue: 'https://www.google.com', closeProcesses: ['chrome.exe'], enabled: true },
+  { id: 'calendar', label: 'Calendar', aliases: ['google calendar', 'schedule'], kind: 'url', openValue: 'https://calendar.google.com', closeProcesses: [], enabled: true },
+  { id: 'word', label: 'Word', aliases: ['microsoft word', 'ms word'], kind: 'app', openValue: 'winword', closeProcesses: ['WINWORD.EXE'], enabled: true },
+  { id: 'excel', label: 'Excel', aliases: ['microsoft excel', 'ms excel'], kind: 'app', openValue: 'excel', closeProcesses: ['EXCEL.EXE'], enabled: true },
+  { id: 'powerpoint', label: 'PowerPoint', aliases: ['microsoft powerpoint', 'power point', 'ms powerpoint'], kind: 'app', openValue: 'powerpnt', closeProcesses: ['POWERPNT.EXE'], enabled: true },
+  { id: 'vscode', label: 'VS Code', aliases: ['code', 'vs code', 'visual studio code'], kind: 'app', openValue: 'code', closeProcesses: ['Code.exe'], enabled: true },
+];
+
+
 let recorder: MediaRecorder | null = null;
 let chunks: BlobPart[] = [];
 let meetingRecorder: MediaRecorder | null = null;
@@ -1440,22 +1457,6 @@ async function setupPushToTalkListeners() {
     else addDebugEvent('push_to_talk_up_ignored_toggle_mode');
   });
 }
-
-const DEFAULT_COMMAND_TARGETS: CommandTarget[] = [
-  { id: 'notion', label: 'Notion', aliases: ['notes', 'my notes', 'notion app', 'motion', 'ocean', 'potion'], kind: 'url', openValue: 'https://www.notion.so', closeProcesses: ['Notion.exe'], enabled: true },
-  { id: 'telegram', label: 'Telegram', aliases: ['tg', 'chat app', 'telegram app', 'telegraph'], kind: 'url', openValue: 'https://web.telegram.org', closeProcesses: ['Telegram.exe'], enabled: true },
-  { id: 'discord', label: 'Discord', aliases: ['chat', 'discord app', 'community'], kind: 'url', openValue: 'https://discord.com/app', closeProcesses: ['Discord.exe', 'DiscordCanary.exe', 'DiscordPTB.exe'], enabled: true },
-  { id: 'x', label: 'X', aliases: ['twitter', 'x dot com'], kind: 'url', openValue: 'https://x.com', closeProcesses: [], enabled: true },
-  { id: 'whatsapp', label: 'WhatsApp', aliases: ['whatsapp web', 'whatsap', 'whatsappa'], kind: 'url', openValue: 'https://web.whatsapp.com', closeProcesses: ['WhatsApp.exe'], enabled: true },
-  { id: 'gmail', label: 'Gmail', aliases: ['mail', 'google mail', 'email'], kind: 'url', openValue: 'https://mail.google.com', closeProcesses: [], enabled: true },
-  { id: 'github', label: 'GitHub', aliases: ['git hub', 'gitup'], kind: 'url', openValue: 'https://github.com', closeProcesses: [], enabled: true },
-  { id: 'chrome', label: 'Chrome', aliases: ['browser', 'internet', 'web', 'google chrome', 'crom', 'grown'], kind: 'app', openValue: 'https://www.google.com', closeProcesses: ['chrome.exe'], enabled: true },
-  { id: 'calendar', label: 'Calendar', aliases: ['google calendar', 'schedule'], kind: 'url', openValue: 'https://calendar.google.com', closeProcesses: [], enabled: true },
-  { id: 'word', label: 'Word', aliases: ['microsoft word', 'ms word'], kind: 'app', openValue: 'winword', closeProcesses: ['WINWORD.EXE'], enabled: true },
-  { id: 'excel', label: 'Excel', aliases: ['microsoft excel', 'ms excel'], kind: 'app', openValue: 'excel', closeProcesses: ['EXCEL.EXE'], enabled: true },
-  { id: 'powerpoint', label: 'PowerPoint', aliases: ['microsoft powerpoint', 'power point', 'ms powerpoint'], kind: 'app', openValue: 'powerpnt', closeProcesses: ['POWERPNT.EXE'], enabled: true },
-  { id: 'vscode', label: 'VS Code', aliases: ['code', 'vs code', 'visual studio code'], kind: 'app', openValue: 'code', closeProcesses: ['Code.exe'], enabled: true },
-];
 
 function loadCommandTargets(): CommandTarget[] {
   const stored = localStorage.getItem(COMMAND_TARGETS_KEY);
