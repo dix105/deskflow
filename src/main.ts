@@ -2014,11 +2014,12 @@ function parseVoiceCommandDecision(phrase: string): VoiceCommandDecision {
     .replace(/\b(please|can you|could you|would you)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const commandMatch = normalized.match(/^(open|launch|start|close|quit|stop)\s+(.+)$/) || normalized.match(/^(.+)\s+(open|close|quit|stop)$/);
+  const commandMatch = normalized.match(/^(open|launch|start|go to|visit|navigate to|close|quit|stop)\s+(.+)$/) || normalized.match(/^(.+)\s+(open|close|quit|stop)$/);
   if (!commandMatch) return { action: 'none', target: '', confidence: 0, reason: 'no exact match', source: 'exact' };
 
-  const actionWord = ['open', 'launch', 'start', 'close', 'quit', 'stop'].includes(commandMatch[1]) ? commandMatch[1] : commandMatch[2];
-  const rawTarget = ['open', 'launch', 'start', 'close', 'quit', 'stop'].includes(commandMatch[1]) ? commandMatch[2] : commandMatch[1];
+  const actionWords = ['open', 'launch', 'start', 'go to', 'visit', 'navigate to', 'close', 'quit', 'stop'];
+  const actionWord = actionWords.includes(commandMatch[1]) ? commandMatch[1] : commandMatch[2];
+  const rawTarget = actionWords.includes(commandMatch[1]) ? commandMatch[2] : commandMatch[1];
   const action: VoiceCommandAction = ['close', 'quit', 'stop'].includes(actionWord) ? 'close' : 'open';
   const resolved = resolveVoiceCommandTarget(rawTarget);
   if (resolved) {

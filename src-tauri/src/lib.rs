@@ -1565,52 +1565,20 @@ fn collect_start_menu_apps(
         if id.is_empty() || !seen.insert(id.clone()) {
             continue;
         }
-        let close_processes = windows_shortcut_process_names(&path);
+        // Keep import fast and responsive. Resolving every .lnk target through
+        // PowerShell during import can freeze the app on machines with many
+        // shortcuts. Defaults still include close-process mappings for common
+        // apps; users can add close processes manually for imported apps.
         apps.push(VoiceCommandTarget {
             id,
             label: label.clone(),
             aliases: windows_app_aliases(&label),
             kind: "app".into(),
             open_value: path.to_string_lossy().to_string(),
-            close_processes,
+            close_processes: Vec::new(),
             enabled: true,
         });
     }
-}
-
-#[cfg(windows)]
-fn windows_shortcut_process_names(path: &PathBuf) -> Vec<String> {
-    let path_str = path.to_string_lossy().to_string();
-    let output = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            "$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($env:FLOWDESK_SHORTCUT_PATH); Write-Output $shortcut.TargetPath",
-        ])
-        .env("FLOWDESK_SHORTCUT_PATH", path_str)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output();
-
-    let Ok(output) = output else { return Vec::new(); };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    let target_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if target_path.is_empty() || !target_path.to_lowercase().ends_with(".exe") {
-        return Vec::new();
-    }
-    let exe = PathBuf::from(target_path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.to_string())
-        .unwrap_or_default();
-    if exe.is_empty() || !is_safe_process_name(&exe) {
-        return Vec::new();
-    }
-    vec![exe]
 }
 
 #[cfg(windows)]
