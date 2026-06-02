@@ -1885,6 +1885,10 @@ function recordNextBrowserVoiceCommandSegment() {
 async function handleVoiceCommand(payload: string) {
   const [phrase, confidence = ''] = payload.split('|');
   const heardPhrase = phrase || '';
+  if (isDictationRecordingActive()) {
+    addDebugEvent('voice_command_ignored_during_dictation', { phrase: heardPhrase, confidence });
+    return;
+  }
   let decision = parseVoiceCommandDecision(heardPhrase);
   recentVoiceCommandPhrases.push({ time: new Date().toISOString(), phrase: heardPhrase, confidence, decision });
   recentVoiceCommandPhrases = recentVoiceCommandPhrases.slice(-50);
@@ -1901,6 +1905,16 @@ async function handleVoiceCommand(payload: string) {
     return;
   }
   await executeVoiceCommandDecision(heardPhrase, decision, confidence);
+}
+
+function isDictationRecordingActive() {
+  return Boolean(
+    recorder?.state === 'recording'
+    || nativeRecordingActive
+    || recordingTransitionInFlight
+    || recordingFinishing
+    || captureTarget
+  );
 }
 
 async function executeVoiceCommandDecision(phrase: string, decision: VoiceCommandDecision, confidence = '') {
