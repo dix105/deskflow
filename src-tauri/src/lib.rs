@@ -2029,21 +2029,24 @@ async fn classify_voice_command(api_key: String, text: String, targets: Vec<Voic
     let response = client
         .post("https://api.cerebras.ai/v1/chat/completions")
         .bearer_auth(api_key.trim())
+        .header("Accept-Encoding", "identity")
         .json(&body)
         .send()
         .await
         .map_err(|e| format!("Cerebras request failed: {e}"))?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("Cerebras API error {status}: {body}"));
+    let status = response.status();
+    let response_body = response
+        .text()
+        .await
+        .map_err(|e| format!("Could not read Cerebras response body: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!("Cerebras API error {status}: {response_body}"));
     }
 
-    let completion: GroqChatResponse = response
-        .json()
-        .await
-        .map_err(|e| format!("Could not parse Cerebras response: {e}"))?;
+    let completion: GroqChatResponse = serde_json::from_str(&response_body)
+        .map_err(|e| format!("Could not parse Cerebras response JSON: {e}; body: {}", response_body.chars().take(1000).collect::<String>()))?;
     let content = completion
         .choices
         .first()
