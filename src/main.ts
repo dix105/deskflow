@@ -2086,6 +2086,10 @@ function parseVoiceCommandDecision(phrase: string): VoiceCommandDecision {
   if (resolved) {
     return { action, target: resolved.target.id, targetId: resolved.target.id, confidence: resolved.source === 'exact' ? 1 : 0.92, reason: `${resolved.source} target match`, source: resolved.source };
   }
+  const fallbackUrl = action === 'open' ? localWebsiteFallbackUrl(rawTarget) : '';
+  if (fallbackUrl) {
+    return { action: 'open', target: fallbackUrl, url: fallbackUrl, confidence: 0.82, reason: 'local safe website fallback', source: 'exact' };
+  }
   return { action: 'none', target: '', confidence: 0, reason: `unknown target: ${rawTarget}`, source: 'exact' };
 }
 
@@ -2117,6 +2121,19 @@ function findCommandTarget(value: string | undefined) {
 
 function normalizeCommandPhrase(value: string) {
   return value.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function localWebsiteFallbackUrl(rawTarget: string) {
+  const cleaned = normalizeCommandPhrase(rawTarget)
+    .replace(/(my|the|a|an|website|site|app|application)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const compact = cleaned.replace(/[^a-z0-9.-]/g, '');
+  if (!compact || compact.length < 3) return '';
+  if (['setting', 'settings', 'controlpanel', 'control-panel', 'explorer', 'fileexplorer', 'files', 'folder'].includes(compact)) return '';
+  if (compact.includes('.')) return safeVoiceCommandUrl(compact);
+  if (/^[a-z0-9][a-z0-9-]{2,30}$/.test(compact)) return safeVoiceCommandUrl(`${compact}.com`);
+  return '';
 }
 
 function safeVoiceCommandUrl(value: string | undefined) {
