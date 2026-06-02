@@ -41,6 +41,7 @@ const VOICE_TRIGGER_START_DELAY_MS = 450;
 const VOICE_STOP_TAIL_DISCARD_MS = 1400;
 const RECORDING_CHUNK_MS = 250;
 const RECORDING_START_BEEP_MS = 180;
+const VOICE_COMMAND_WAKE_PREFIXES = ['computer', 'flowdesk', 'flow desk', 'hey flow', 'hey flowdesk', 'command'];
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad' | 'meeting';
@@ -1837,7 +1838,7 @@ async function startBrowserAudioCommandLoop() {
   browserVoiceMicStream = stream;
   browserVoiceAudioLoopActive = true;
   addDebugEvent('browser_audio_voice_commands_started', { provider: transcriptionProvider });
-  setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Try “open Notion” or “go to Instagram”.`);
+  setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Say “computer open Notion” or “hey flow go to Instagram”.`);
   recordNextBrowserVoiceCommandSegment();
 }
 
@@ -1885,7 +1886,12 @@ function recordNextBrowserVoiceCommandSegment() {
           const text = (await transcribeAudioBytes(bytes)).trim();
           if (text) {
             addDebugEvent('browser_audio_voice_command_transcript', { text });
-            await handleVoiceCommand(`${text}|mac-audio`);
+            const commandText = extractWakePrefixedVoiceCommand(text);
+            if (!commandText) {
+              addDebugEvent('browser_audio_voice_command_ignored_no_wake_prefix', { text });
+              return;
+            }
+            await handleVoiceCommand(`${commandText}|mac-audio`);
           }
         }
       }
@@ -1907,6 +1913,15 @@ function recordNextBrowserVoiceCommandSegment() {
     stopBrowserAudioCommandLoop();
     setStatus('error', `Could not start audio command listener: ${String(error)}`);
   }
+}
+
+function extractWakePrefixedVoiceCommand(text: string) {
+  const normalized = text.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const prefix of VOICE_COMMAND_WAKE_PREFIXES) {
+    if (normalized === prefix) return '';
+    if (normalized.startsWith(`${prefix} `)) return text.slice(prefix.length).trim();
+  }
+  return '';
 }
 
 async function handleVoiceCommand(payload: string) {
