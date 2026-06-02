@@ -502,7 +502,6 @@ renderMeetings();
 renderStats();
 renderCommandTargets();
 renderCommandHistory();
-if (isTauriRuntime && isWindowsDesktop) importWindowsApps({ silent: true }).catch((error) => addDebugEvent('windows_app_import_auto_failed', String(error)));
 pauseBackgroundMediaInput.checked = pauseBackgroundMediaEnabled;
 autoPolishInput.checked = autoPolishEnabled;
 fastMicInput.checked = fastMicEnabled;
