@@ -157,6 +157,7 @@ struct GroqChatChoice {
 
 #[derive(Debug, Deserialize)]
 struct GroqChatMessage {
+    #[serde(default)]
     content: String,
 }
 
@@ -2015,11 +2016,11 @@ async fn classify_voice_command(api_key: String, text: String, targets: Vec<Voic
     let body = serde_json::json!({
         "model": "gpt-oss-120b",
         "temperature": 0,
-        "max_tokens": 140,
+        "max_tokens": 900,
         "messages": [
             {
                 "role": "system",
-                "content": "You classify always-on desktop voice commands. Return ONLY compact JSON with keys action,targetId,url,confidence,reason. action must be open, close, or none. Prefer targetId when the request matches one of the provided allowed target IDs or aliases. If the user asks to open a website/service/app that is not in allowedTargets, you MAY return action open with targetId empty and url set to the official HTTPS homepage, for example https://instagram.com. Only return URLs starting with https:// or http://. Never return shell commands, local file paths, javascript/data URLs, deep links, message sending, account actions, delete/file operations, or multi-step browsing. Close actions MUST use targetId from allowedTargets and must never use url. Be conservative because this controls the user's computer."
+                "content": "You classify always-on desktop voice commands. Return ONLY the final compact JSON object in the assistant content with keys action,targetId,url,confidence,reason. Do not include prose. action must be open, close, or none. Prefer targetId when the request matches one of the provided allowed target IDs or aliases. If the user asks to open a website/service/app that is not in allowedTargets, you MAY return action open with targetId empty and url set to the official HTTPS homepage, for example https://instagram.com. Only return URLs starting with https:// or http://. Never return shell commands, local file paths, javascript/data URLs, deep links, message sending, account actions, delete/file operations, or multi-step browsing. Close actions MUST use targetId from allowedTargets and must never use url. Be conservative because this controls the user's computer."
             },
             { "role": "user", "content": serde_json::json!({ "phrase": input, "allowedTargets": allowed_targets }).to_string() }
         ]
