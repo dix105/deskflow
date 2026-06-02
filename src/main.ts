@@ -1661,10 +1661,24 @@ async function startVoiceCommands() {
     return startBrowserVoiceCommands();
   }
   await setupPushToTalkListeners();
+  await invoke('stop_windows_command_listener');
+  stopVoiceCommandWatchdog();
+
+  // Root cause fix: Windows Speech open-ended dictation is too inaccurate for
+  // arbitrary app names. It can mishear targets or only catch common apps.
+  // If an STT key exists, use the same cloud STT audio loop for commands so
+  // GPT/local parsing receives a real transcript. Windows Speech remains a
+  // no-key fallback only.
+  if (activeTranscriptionKey()) {
+    await startBrowserAudioCommandLoop();
+    addDebugEvent('voice_commands_started', { backend: 'stt-audio-loop', provider: transcriptionProvider });
+    return;
+  }
+
   await invoke('start_windows_command_listener', { commands: voiceCommandPhrases() });
   startVoiceCommandWatchdog();
-  addDebugEvent('voice_commands_started', { commands: voiceCommandPhrases().length });
-  setStatus('success', 'Always-on app commands enabled. Local parser handles app/site names and ignores failed commands silently.');
+  addDebugEvent('voice_commands_started', { backend: 'windows-speech-fallback', commands: voiceCommandPhrases().length });
+  setStatus('success', 'Always-on app commands enabled with Windows Speech fallback. Add an STT key for better understanding.');
 }
 
 async function stopVoiceCommands() {
@@ -1747,7 +1761,7 @@ async function startBrowserVoiceCommands() {
         voiceCommandsEnabled = false;
         voiceCommandsInput.checked = false;
         localStorage.setItem(VOICE_COMMANDS_KEY, 'false');
-        setStatus('error', `Mac voice command fallback failed: ${String(error)}`);
+        setStatus('error', `Audio voice command fallback failed: ${String(error)}`);
       });
     }
   };
@@ -1817,13 +1831,13 @@ function stopBrowserVoiceCommands() {
 async function startBrowserAudioCommandLoop() {
   if (browserVoiceAudioLoopActive) return;
   if (!activeTranscriptionKey()) {
-    throw new Error(`Add your ${providerLabel()} API key first for Mac always-on voice commands.`);
+    throw new Error(`Add your ${providerLabel()} API key first for audio-based always-on voice commands.`);
   }
   const stream = browserVoiceMicStream || await navigator.mediaDevices.getUserMedia({ audio: true });
   browserVoiceMicStream = stream;
   browserVoiceAudioLoopActive = true;
   addDebugEvent('browser_audio_voice_commands_started', { provider: transcriptionProvider });
-  setStatus('success', `Mac always-on commands enabled with ${providerLabel()} audio fallback. Try “open Notion”.`);
+  setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Try “open Notion” or “go to Instagram”.`);
   recordNextBrowserVoiceCommandSegment();
 }
 
@@ -1846,7 +1860,7 @@ function recordNextBrowserVoiceCommandSegment() {
     voiceCommandsEnabled = false;
     voiceCommandsInput.checked = false;
     localStorage.setItem(VOICE_COMMANDS_KEY, 'false');
-    setStatus('error', `Add your ${providerLabel()} API key first for Mac always-on voice commands.`);
+    setStatus('error', `Add your ${providerLabel()} API key first for audio-based always-on voice commands.`);
     return;
   }
 
@@ -1891,7 +1905,7 @@ function recordNextBrowserVoiceCommandSegment() {
   } catch (error) {
     addDebugEvent('browser_audio_voice_command_recorder_start_failed', String(error));
     stopBrowserAudioCommandLoop();
-    setStatus('error', `Could not start Mac audio command listener: ${String(error)}`);
+    setStatus('error', `Could not start audio command listener: ${String(error)}`);
   }
 }
 
