@@ -553,16 +553,7 @@ fn start_windows_command_listener(_app: tauri::AppHandle, _commands: Vec<String>
     let script = r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
-$commands = ($env:FLOWDESK_COMMANDS -split "\n") | Where-Object { $_.Trim().Length -gt 0 }
 $recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine ([System.Globalization.CultureInfo]::CurrentCulture)
-$choices = New-Object System.Speech.Recognition.Choices
-foreach ($command in $commands) { [void]$choices.Add($command) }
-$grammarBuilder = New-Object System.Speech.Recognition.GrammarBuilder
-$grammarBuilder.Culture = $recognizer.RecognizerInfo.Culture
-[void]$grammarBuilder.Append($choices)
-$grammar = New-Object System.Speech.Recognition.Grammar($grammarBuilder)
-$grammar.Name = 'FlowDesk exact commands'
-$recognizer.LoadGrammar($grammar)
 $dictationGrammar = New-Object System.Speech.Recognition.DictationGrammar
 $dictationGrammar.Name = 'FlowDesk open-ended commands'
 $recognizer.LoadGrammar($dictationGrammar)
@@ -570,10 +561,12 @@ $recognizer.SetInputToDefaultAudioDevice()
 Register-ObjectEvent -InputObject $recognizer -EventName SpeechRecognized -Action {
   $text = $EventArgs.Result.Text
   $confidence = $EventArgs.Result.Confidence
-  $grammarName = $EventArgs.Result.Grammar.Name
-  $isExact = $grammarName -eq 'FlowDesk exact commands'
-  $looksLikeCommand = $text -match '(?i)\b(open|launch|start|close|quit|stop)\b'
-  if (($isExact -and $confidence -ge 0.50) -or ($looksLikeCommand -and $confidence -ge 0.65)) {
+  # Do not use a huge exact grammar of imported app names. Windows Speech will
+  # snap unrelated words like "settings" to the nearest app phrase (for example
+  # "open zed") and cause false opens. Emit only natural utterances that already
+  # contain an explicit command verb; JS/GPT then resolves or clarifies safely.
+  $looksLikeCommand = $text -match '(?i)\b(open|launch|start|close|quit|stop|go to|visit|navigate)\b'
+  if ($looksLikeCommand -and $confidence -ge 0.60) {
     [Console]::Out.WriteLine(('FLOWDESK_COMMAND:' + $EventArgs.Result.Text + '|' + $EventArgs.Result.Confidence))
     [Console]::Out.Flush()
   }
