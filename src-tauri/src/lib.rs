@@ -188,6 +188,16 @@ struct VoiceCommandTarget {
     enabled: bool,
 }
 
+#[cfg(windows)]
+#[derive(Debug, Deserialize)]
+struct WindowsDiscoveredApp {
+    label: String,
+    #[serde(rename = "openValue")]
+    open_value: String,
+    #[serde(rename = "closeProcess")]
+    close_process: Option<String>,
+}
+
 #[tauri::command]
 async fn transcribe_audio(
     provider: Option<String>,
@@ -941,7 +951,7 @@ async fn sarvam_text_to_speech(api_key: String, text: String) -> Result<String, 
     let body = serde_json::json!({
         "text": text,
         "target_language_code": "en-IN",
-        "speaker": "anushka",
+        "speaker": "ritu",
         "model": "bulbul:v3"
     });
 
@@ -1509,18 +1519,97 @@ fn paste_transcript(text: String) -> Result<(), String> {
 fn discover_windows_app_targets() -> Result<Vec<VoiceCommandTarget>, String> {
     #[cfg(windows)]
     {
-        let mut apps = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        let mut roots = Vec::new();
-        if let Ok(program_data) = std::env::var("PROGRAMDATA") {
-            roots.push(PathBuf::from(program_data).join("Microsoft\\Windows\\Start Menu\\Programs"));
-        }
-        if let Ok(app_data) = std::env::var("APPDATA") {
-            roots.push(PathBuf::from(app_data).join("Microsoft\\Windows\\Start Menu\\Programs"));
+        let script = r#"
+$ErrorActionPreference = 'SilentlyContinue'
+$apps = @()
+$seen = @{}
+function Add-App($label, $openValue, $closeProcess) {
+  if ([string]::IsNullOrWhiteSpace($label) -or [string]::IsNullOrWhiteSpace($openValue)) { return }
+  $cleanLabel = ($label -replace '\.lnk$', '' -replace ' - Shortcut$', '').Trim()
+  if ([string]::IsNullOrWhiteSpace($cleanLabel)) { return }
+  if ($cleanLabel -match '(?i)uninstall|readme|license|documentation|release notes') { return }
+  $key = $cleanLabel.ToLowerInvariant() + '|' + $openValue.ToLowerInvariant()
+  if ($seen.ContainsKey($key)) { return }
+  $seen[$key] = $true
+  $apps += [pscustomobject]@{ label = $cleanLabel; openValue = $openValue; closeProcess = $closeProcess }
+}
+function Exe-Name($path) {
+  if ([string]::IsNullOrWhiteSpace($path)) { return $null }
+  $candidate = $path.Trim().Trim('"')
+  if ($candidate -match '^(.*?\.exe)') { $candidate = $matches[1] }
+  if ($candidate -and $candidate.ToLowerInvariant().EndsWith('.exe')) { return [IO.Path]::GetFileName($candidate) }
+  return $null
+}
+$shell = New-Object -ComObject WScript.Shell
+$roots = @(
+  [Environment]::GetFolderPath('CommonPrograms'),
+  [Environment]::GetFolderPath('Programs')
+) | Where-Object { $_ -and (Test-Path $_) }
+foreach ($root in $roots) {
+  Get-ChildItem -Path $root -Filter *.lnk -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+    $shortcut = $shell.CreateShortcut($_.FullName)
+    $target = $shortcut.TargetPath
+    Add-App $_.BaseName $_.FullName (Exe-Name $target)
+  }
+}
+$regRoots = @(
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+)
+foreach ($root in $regRoots) {
+  Get-ItemProperty $root -ErrorAction SilentlyContinue | ForEach-Object {
+    $name = $_.DisplayName
+    $open = $null
+    if ($_.DisplayIcon) { $open = ($_.DisplayIcon -replace ',\d+$', '').Trim('"') }
+    if ((-not $open) -and $_.InstallLocation) { $open = $_.InstallLocation }
+    $proc = Exe-Name $open
+    if ($proc -and (Test-Path $open)) { Add-App $name $open $proc }
+  }
+}
+$apps | Sort-Object label -Unique | ConvertTo-Json -Compress
+"#;
+
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .map_err(|e| format!("Could not discover Windows apps: {e}"))?;
+
+        if !output.status.success() {
+            return Err("Windows app discovery failed".into());
         }
 
-        for root in roots {
-            collect_start_menu_apps(&root, 0, &mut seen, &mut apps);
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if stdout.is_empty() {
+            return Ok(Vec::new());
+        }
+        let discovered: Vec<WindowsDiscoveredApp> = serde_json::from_str(&stdout)
+            .or_else(|_| serde_json::from_str::<WindowsDiscoveredApp>(&stdout).map(|one| vec![one]))
+            .map_err(|e| format!("Could not parse Windows app discovery output: {e}"))?;
+
+        let mut apps = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for app in discovered {
+            let id = sanitize_target_id(&app.label.replace('&', "and"));
+            if id.is_empty() || !seen.insert(id.clone()) || !is_safe_app_open_value(&app.open_value) {
+                continue;
+            }
+            let close_processes = app
+                .close_process
+                .filter(|process| is_safe_process_name(process))
+                .into_iter()
+                .collect();
+            apps.push(VoiceCommandTarget {
+                id,
+                label: app.label.clone(),
+                aliases: windows_app_aliases(&app.label),
+                kind: "app".into(),
+                open_value: app.open_value,
+                close_processes,
+                enabled: true,
+            });
         }
         apps.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
         Ok(apps)
@@ -1530,75 +1619,6 @@ fn discover_windows_app_targets() -> Result<Vec<VoiceCommandTarget>, String> {
     {
         Ok(Vec::new())
     }
-}
-
-#[cfg(windows)]
-fn collect_start_menu_apps(
-    dir: &PathBuf,
-    depth: usize,
-    seen: &mut std::collections::HashSet<String>,
-    apps: &mut Vec<VoiceCommandTarget>,
-) {
-    if depth > 5 || !dir.exists() {
-        return;
-    }
-    let Ok(entries) = fs::read_dir(dir) else { return; };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_start_menu_apps(&path, depth + 1, seen, apps);
-            continue;
-        }
-        let is_shortcut = path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.eq_ignore_ascii_case("lnk"))
-            .unwrap_or(false);
-        if !is_shortcut {
-            continue;
-        }
-        let Some(label) = path.file_stem().and_then(|name| name.to_str()).map(clean_windows_app_label) else { continue; };
-        if label.is_empty() || is_noisy_windows_shortcut(&label) {
-            continue;
-        }
-        let id = sanitize_target_id(&label.replace('&', "and"));
-        if id.is_empty() || !seen.insert(id.clone()) {
-            continue;
-        }
-        // Keep import fast and responsive. Resolving every .lnk target through
-        // PowerShell during import can freeze the app on machines with many
-        // shortcuts. Defaults still include close-process mappings for common
-        // apps; users can add close processes manually for imported apps.
-        apps.push(VoiceCommandTarget {
-            id,
-            label: label.clone(),
-            aliases: windows_app_aliases(&label),
-            kind: "app".into(),
-            open_value: path.to_string_lossy().to_string(),
-            close_processes: Vec::new(),
-            enabled: true,
-        });
-    }
-}
-
-#[cfg(windows)]
-fn clean_windows_app_label(value: &str) -> String {
-    value
-        .replace(".lnk", "")
-        .replace(" - Shortcut", "")
-        .trim()
-        .to_string()
-}
-
-#[cfg(windows)]
-fn is_noisy_windows_shortcut(label: &str) -> bool {
-    let normalized = label.to_lowercase();
-    normalized.contains("uninstall")
-        || normalized.contains("readme")
-        || normalized.contains("license")
-        || normalized.contains("documentation")
-        || normalized.contains("release notes")
-        || normalized.contains("website")
 }
 
 #[cfg(windows)]

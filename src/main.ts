@@ -1976,7 +1976,7 @@ async function speakCommandMessage(message: string, reason = 'confirmation') {
     return;
   }
   try {
-    addDebugEvent('sarvam_command_tts_start', { speaker: 'anushka', reason, message });
+    addDebugEvent('sarvam_command_tts_start', { speaker: 'ritu', reason, message });
     const base64Audio = await invoke<string>('sarvam_text_to_speech', { apiKey: key, text: message });
     const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
     audio.addEventListener('ended', () => addDebugEvent('sarvam_command_tts_ended', { reason }));
