@@ -41,7 +41,7 @@ const VOICE_TRIGGER_START_DELAY_MS = 450;
 const VOICE_STOP_TAIL_DISCARD_MS = 1400;
 const RECORDING_CHUNK_MS = 250;
 const RECORDING_START_BEEP_MS = 180;
-const VOICE_COMMAND_WAKE_PREFIXES = ['computer', 'flowdesk', 'flow desk', 'hey flow', 'hey flowdesk', 'command'];
+const VOICE_COMMAND_WAKE_PREFIXES = ['alexa'];
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
 type ViewName = 'dictation' | 'dictionary' | 'snippets' | 'style' | 'transforms' | 'scratchpad' | 'meeting';
@@ -1838,7 +1838,7 @@ async function startBrowserAudioCommandLoop() {
   browserVoiceMicStream = stream;
   browserVoiceAudioLoopActive = true;
   addDebugEvent('browser_audio_voice_commands_started', { provider: transcriptionProvider });
-  setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Say “computer open Notion” or “hey flow go to Instagram”.`);
+  setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Say “Alexa open Notion” or “Alexa go to Instagram”.`);
   recordNextBrowserVoiceCommandSegment();
 }
 
