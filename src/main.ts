@@ -41,6 +41,7 @@ const VOICE_TRIGGER_START_DELAY_MS = 450;
 const VOICE_STOP_TAIL_DISCARD_MS = 1400;
 const RECORDING_CHUNK_MS = 250;
 const RECORDING_START_BEEP_MS = 180;
+const VOICE_COMMAND_CAPTURE_MS = 4500;
 const VOICE_COMMAND_WAKE_PREFIXES = ['alexa'];
 
 type StatusKind = 'idle' | 'recording' | 'working' | 'error' | 'success';
@@ -186,6 +187,11 @@ let browserVoiceMicStream: MediaStream | null = null;
 let browserVoiceSegmentRecorder: MediaRecorder | null = null;
 let browserVoiceSegmentChunks: BlobPart[] = [];
 let browserVoiceAudioLoopActive = false;
+let browserVoiceWakeGateActive = false;
+let browserVoiceCommandCaptureRecorder: MediaRecorder | null = null;
+let browserVoiceCommandCaptureChunks: BlobPart[] = [];
+let browserVoiceCommandCaptureStream: MediaStream | null = null;
+let browserVoiceCommandCaptureTimer = 0;
 let waveformContext: AudioContext | null = null;
 let waveformAnalyser: AnalyserNode | null = null;
 let soundContext: AudioContext | null = null;
@@ -1442,7 +1448,12 @@ async function setupPushToTalkListeners() {
   await listen<string>('voice-command-detected', (event) => handleVoiceCommand(String(event.payload)));
   await listen('wake-word-detected', (event) => {
     addDebugEvent('wake_word_detected', { probability: event.payload });
-    startRecordingFromVoiceTrigger();
+    if (browserVoiceWakeGateActive && voiceCommandsEnabled) {
+      startWakeGatedVoiceCommandCapture();
+      return;
+    }
+    if (voiceTriggerEnabled) startRecordingFromVoiceTrigger();
+    else addDebugEvent('wake_word_ignored_no_voice_trigger');
   });
   await listen('voice-stop-detected', (event) => {
     addDebugEvent('voice_stop_detected', { probability: event.payload });
@@ -1834,9 +1845,21 @@ async function startBrowserAudioCommandLoop() {
   if (!activeTranscriptionKey()) {
     throw new Error(`Add your ${providerLabel()} API key first for audio-based always-on voice commands.`);
   }
+
+  if (isTauriRuntime && isWindowsDesktop) {
+    await setupPushToTalkListeners();
+    await invoke('start_wake_word_listener', { threshold: 0.3 });
+    browserVoiceAudioLoopActive = true;
+    browserVoiceWakeGateActive = true;
+    addDebugEvent('browser_audio_voice_commands_started', { provider: transcriptionProvider, mode: 'local-wake-gated', wakeWord: 'Alexa' });
+    setStatus('success', `Always-on commands enabled. Local Alexa wake-word detection is active; ${providerLabel()} only receives audio after wake.`);
+    return;
+  }
+
   const stream = browserVoiceMicStream || await navigator.mediaDevices.getUserMedia({ audio: true });
   browserVoiceMicStream = stream;
   browserVoiceAudioLoopActive = true;
+  browserVoiceWakeGateActive = false;
   addDebugEvent('browser_audio_voice_commands_started', { provider: transcriptionProvider });
   setStatus('success', `Always-on commands enabled with ${providerLabel()} audio understanding. Say “Alexa open Notion” or “Alexa go to Instagram”.`);
   recordNextBrowserVoiceCommandSegment();
@@ -1844,6 +1867,11 @@ async function startBrowserAudioCommandLoop() {
 
 function stopBrowserAudioCommandLoop() {
   browserVoiceAudioLoopActive = false;
+  browserVoiceWakeGateActive = false;
+  stopWakeGatedVoiceCommandCapture();
+  if (isTauriRuntime && isWindowsDesktop && !voiceTriggerEnabled) {
+    invoke('stop_wake_word_listener').catch((error) => addDebugEvent('wake_word_stop_after_commands_failed', String(error)));
+  }
   if (browserVoiceSegmentRecorder?.state === 'recording') {
     try { browserVoiceSegmentRecorder.stop(); } catch {}
   }
@@ -1852,6 +1880,93 @@ function stopBrowserAudioCommandLoop() {
   browserVoiceMicStream?.getTracks().forEach((track) => track.stop());
   browserVoiceMicStream = null;
   addDebugEvent('browser_audio_voice_commands_stopped');
+}
+
+async function startWakeGatedVoiceCommandCapture() {
+  if (!browserVoiceWakeGateActive || !voiceCommandsEnabled) return;
+  if (browserVoiceCommandCaptureRecorder?.state === 'recording') {
+    addDebugEvent('wake_gated_voice_command_ignored_already_recording');
+    return;
+  }
+  if (isDictationRecordingActive()) {
+    addDebugEvent('wake_gated_voice_command_ignored_dictation_busy');
+    return;
+  }
+  if (!activeTranscriptionKey()) {
+    setStatus('error', `Add your ${providerLabel()} API key first for audio-based always-on voice commands.`);
+    addDebugEvent('wake_gated_voice_command_missing_key', { provider: transcriptionProvider });
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    browserVoiceCommandCaptureStream = stream;
+    browserVoiceCommandCaptureChunks = [];
+    const mimeType = pickMimeType();
+    const commandRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    browserVoiceCommandCaptureRecorder = commandRecorder;
+
+    commandRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) browserVoiceCommandCaptureChunks.push(event.data);
+    };
+
+    commandRecorder.onstop = async () => {
+      window.clearTimeout(browserVoiceCommandCaptureTimer);
+      browserVoiceCommandCaptureTimer = 0;
+      const chunksSnapshot = browserVoiceCommandCaptureChunks.slice();
+      browserVoiceCommandCaptureChunks = [];
+      browserVoiceCommandCaptureRecorder = null;
+      browserVoiceCommandCaptureStream?.getTracks().forEach((track) => track.stop());
+      browserVoiceCommandCaptureStream = null;
+
+      try {
+        if (!browserVoiceWakeGateActive || !chunksSnapshot.length) return;
+        const blob = new Blob(chunksSnapshot, { type: mimeType || 'audio/webm' });
+        addDebugEvent('wake_gated_voice_command_audio_ready', { bytes: blob.size, provider: transcriptionProvider });
+        if (blob.size <= 1200) {
+          addDebugEvent('wake_gated_voice_command_ignored_tiny_audio', { bytes: blob.size });
+          setStatus('idle', 'Wake word heard, but no command audio captured. Say “Alexa”, pause, then the command.');
+          return;
+        }
+        setStatus('working', `Wake word heard — sending command audio to ${providerLabel()}…`);
+        const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+        const text = (await transcribeAudioBytes(bytes)).trim();
+        addDebugEvent('wake_gated_voice_command_transcript', { text });
+        if (!text) {
+          setStatus('idle', 'Wake word heard, but command was empty.');
+          return;
+        }
+        const commandText = extractWakePrefixedVoiceCommand(text) || text;
+        await handleVoiceCommand(`${commandText}|wake-gated-audio`);
+      } catch (error) {
+        addDebugEvent('wake_gated_voice_command_failed', String(error));
+        setStatus('error', `Voice command failed after wake word: ${String(error)}`);
+      }
+    };
+
+    commandRecorder.start();
+    addDebugEvent('wake_gated_voice_command_capture_started', { durationMs: VOICE_COMMAND_CAPTURE_MS, provider: transcriptionProvider });
+    setStatus('recording', 'Alexa detected locally. Listening for your command…');
+    browserVoiceCommandCaptureTimer = window.setTimeout(() => {
+      if (commandRecorder.state === 'recording') commandRecorder.stop();
+    }, VOICE_COMMAND_CAPTURE_MS);
+  } catch (error) {
+    stopWakeGatedVoiceCommandCapture();
+    addDebugEvent('wake_gated_voice_command_capture_start_failed', String(error));
+    setStatus('error', `Could not record command after wake word: ${String(error)}`);
+  }
+}
+
+function stopWakeGatedVoiceCommandCapture() {
+  window.clearTimeout(browserVoiceCommandCaptureTimer);
+  browserVoiceCommandCaptureTimer = 0;
+  if (browserVoiceCommandCaptureRecorder?.state === 'recording') {
+    try { browserVoiceCommandCaptureRecorder.stop(); } catch {}
+  }
+  browserVoiceCommandCaptureRecorder = null;
+  browserVoiceCommandCaptureChunks = [];
+  browserVoiceCommandCaptureStream?.getTracks().forEach((track) => track.stop());
+  browserVoiceCommandCaptureStream = null;
 }
 
 function recordNextBrowserVoiceCommandSegment() {
